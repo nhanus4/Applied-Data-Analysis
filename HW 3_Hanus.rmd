@@ -1,0 +1,480 @@
+---
+title: "Homework 3"
+author: "Nicky Hanus"
+date: "4/7/15"
+output: html_document
+---
+
+####Conduct OLS Regressions to Replicate Tables II and III
+First, I will replicate the variables listed in Tables II and III.
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Simulation of Anglin and Gencay (1996) Tables II and III
+
+setwd("~/19-704/Homeworks/Homework 3")
+
+# Install required libraries and packages
+install.packages("AER")
+library(AER)
+library(MASS)
+library(plyr)
+install.packages("arm", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+library(arm)
+library(foreign)
+library(car)
+
+# Read in data
+data(HousePrices)
+
+# Make a copy of the data 
+HW3 <- HousePrices
+
+# Shorten some of the column names and rename them
+names(HW3)[names(HW3)=="price"]      <- "P"
+names(HW3)[names(HW3)=="driveway"]   <- "DRV"
+names(HW3)[names(HW3)=="recreation"] <- "REC"
+names(HW3)[names(HW3)=="fullbase"]   <- "FFIN"
+names(HW3)[names(HW3)=="gasheat"]    <- "GHW"
+names(HW3)[names(HW3)=="aircon"]     <- "CA"
+names(HW3)[names(HW3)=="garage"]     <- "GAR"
+names(HW3)[names(HW3)=="prefer"]     <- "REG"
+names(HW3)[names(HW3)=="bedrooms"]   <- "BDMS"
+names(HW3)[names(HW3)=="bathrooms"]  <- "FB"
+names(HW3)[names(HW3)=="lotsize"]    <- "LOT"
+names(HW3)[names(HW3)=="stories"]    <- "STY"
+
+# Transform the LOT, BDMS, FB, and STY values
+log.LOT  <- log(HW3$LOT)
+log.BDMS <- log(HW3$BDMS)
+log.FB   <- log(HW3$FB)
+log.STY  <- log(HW3$STY)
+
+# Append the new variables to the dataframe, HW3
+HW3 <- cbind(HW3, log.LOT, log.BDMS, log.FB, log.STY)
+
+```
+##Part 1: Replication of Table II and Table III
+###Question 1: Conduct the OLS and compare results
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# Log Transform the dependent variable
+HW3$lnP <- log(HW3$P)
+
+# Peform the linear regression with the transformed DV, Table II
+HW3.TableII.reg <- lm(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + log.LOT + log.BDMS + log.FB
+                 + log.STY,
+                 data = HW3)
+
+# Begin reproducing Table II
+TableII.square.res <- (HW3.TableII.reg$residuals)^2
+TableII.SSR        <- sum(TableII.square.res)
+TableII.LogLik     <- logLik(HW3.TableII.reg)
+TableII.R_2        <- c(0.6839) # Taken from summary
+TableII.R_bar_2    <- c(0.6774) # Taken from summary
+TableII.obs        <- length(HW3$lnP)
+
+# extract coefficients and rename for printing
+Table.II <- summary(HW3.TableII.reg)$coefficients[c(1,2,3,4,5,6,7,8,9,10,11,12),c(1,3)]
+Table.II <- rbind(Table.II, TableII.SSR, TableII.R_2, TableII.R_bar_2, TableII.obs, 
+                  TableII.LogLik)
+
+# name the table rows
+rownames(Table.II) <- c("Constant", "DRV", "REC", "FFIN", "GHW", "CA", "GAR", "REG", 
+                       "log(LOT)", "log(BDMS)", "log(FB)", "log(STY)", "SSR", "R^2",
+                       "R.bar^2", "Number of observations", "Log likelihood function")
+
+# input authors' results for Table II for comparison
+Paper.II <- cbind(c(7.921, 0.110, 0.060, 0.096, 0.173, 0.171, 0.049, 0.130, 0.313, 0.089, 0.264, 
+                   0.165, 23.838, 0.684, 0.677, 546, 80.119), 
+                  c(36.137, 3.863, 2.283, 4.417, 3.929, 8.031, 4.238, 5.693, 11.623, 2.031,
+                    8.450, 6.627))
+Table.II <- cbind(Paper.II[,1], Table.II[,1], Paper.II[,2], Table.II[,2])
+
+# table column names
+colnames(Table.II) <- c("Authors' Coef", "Replicated Coef", "Authors' t-values"
+                        , "Replicated t-values")
+
+# Print Table II
+print("Table II")
+Table.II
+
+# Begin regression for Table III
+# Peform the linear regression with the transformed DV with discrete variables in levels
+HW3.TableIII.reg <- lm(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + log.LOT + BDMS + FB
+                       + STY, data = HW3)
+
+# Begin recreating variables for Table III
+TableIII.square.res <- (HW3.TableIII.reg$residuals)^2
+TableIII.SSR        <- sum(TableIII.square.res)
+TableIII.LogLik     <- logLik(HW3.TableIII.reg)
+TableIII.R_2        <- c(0.6866) # Taken from summary
+TableIII.R_bar_2    <- c(0.6801) # Taken from summary
+TableIII.obs        <- length(HW3$lnP)
+
+# extract coefficients and rename for printing
+Table.III <- summary(HW3.TableIII.reg)$coefficients[c(1,2,3,4,5,6,7,8,9,10,11,12),c(1,3)]
+Table.III <- rbind(Table.III, TableIII.SSR, TableIII.R_2, TableIII.R_bar_2, TableIII.obs, 
+                   TableIII.LogLik)
+
+# label the rows
+rownames(Table.III) <- c("Constant", "DRV", "REC", "FFIN", "GHW", "CA", "GAR", "REG", 
+                       "log(LOT)", "BDMS", "FB", "STY", "SSR", "R^2",
+                       "R.bar^2", "Number of observations", "Log likelihood function")
+
+# input authors' results for Table III for comparison
+Paper.III <- cbind(c(7.745, 0.110, 0.058, 0.105, 0.179, 0.166, 0.048, 0.132, 0.303, 0.344, 0.166, 
+                   0.092, 23.638, 0.687, 0.680, 546, 82.412), 
+                  c(35.801, 3.904, 2.225, 4.817, 4.079, 7.799, 4.179, 5.816, 11.356, 2.410,
+                    8.154, 7.268))
+Table.III <- cbind(Paper.III[,1], Table.III[,1], Paper.III[,2], Table.III[,2])
+
+
+# table column names
+colnames(Table.III) <- c("Authors' Coef", "Replicated Coef", "Authors' t-values"
+                         , "Replicated t-values")
+
+# Print Table III
+print("Table III")
+Table.III
+
+```
+###Question 2: Interpret the coefficients for the DRV and LOT variables
+In both regressions, the dependent variable is a log transform. Also, the independent variable, DRV, is a level variable and the independent variable, LOT, is a log variable. The percent change in P (Price) is equal to 100 times the coefficient of DRV (driveways); therefore, the presence of driveways increases the price by approximately 11% (100x0.11) since it is a log-level model. When looking at the LOT variable, we see that a percent change in P is equal to a percent change in LOT size since it is a log-log model. Therefore, an increase in Lot Size of one percent results in an increase in Price of approximately 0.32%.
+
+It would make sense to use mean-centering for variables that are non-zero and non-binary (i.e. lot, bedrooms, stories, and bathrooms). These values will never be zero, anyways, which supports the idea that mean-centering is applicable. The binary variables, however, should not be mean-centered (i.e. driveway, recreational room, finished basement, gas heating, central air, garage, and preferred neighborhood).
+
+##Part 2: Tell the Five Stories for Benchmark (Table III)
+###Question 1:
+First we look at the histograms of the house prices, log house prices, lot size, number of bedrooms, number of full bathrooms, and number of stories, with a summary.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# Question 1
+# Create histograms of house prices, log house prices, lot size, number of bedrooms, number of full bathrooms, and number of stories
+
+# Plot the histograms
+hist(HW3$P, 
+     xlim = c(0, 200000), # the x axis ranges from 0 to 200,000
+     ylim = c(0, 200), # the y axis ranges from 0 to 500
+     main = "Price", # The main title is "Price"
+     breaks = "FD", # Use the "bins" vector to determine the x axis bins
+     xlab = "")
+
+
+hist(HW3$lnP, xlim = c(10,15), ylim = c(0,200), main = "Log Price", breaks = "FD", xlab = "")
+
+hist(HW3$LOT, xlim = c(0,16500), ylim = c(0, 200), main = "Lot Size", breaks = "FD", xlab = "")
+
+hist(HW3$BDMS, xlim = c(0,10), ylim = c(0, 400), main = "Bedrooms", breaks = "FD", xlab = "")
+
+hist(HW3$FB, xlim = c(0,5), ylim = c(0, 400), main = "Bathrooms", breaks = "FD", xlab = "")
+
+hist(HW3$STY, xlim = c(0,5), ylim = c(0, 250), main = "Stories", breaks = "FD", xlab = "")
+
+```
+
+From the Price histogram, we see that the Price is positively skewed and the mean appears to be around $50,000. The log transformation makes the price more normally distributed without any heavy tails. Lot Size is also positively skewed and has a heavy right end tail, suggesting the majority of houses have a lot size less than 8,000 SF. This also suggests that Lot Size should be log transformed as well since it resembles the Price histogram.
+
+The Bathrooms histogram shows discrete data and the majority of homes have 1 bathroom. The Stories histogram is similar in that it depicts discrete data; the majority of homes have 1 or 2 stories.
+
+Since the majority of houses have 1 bathroom and 1 or 2 stories suggest our results for the dependent variable rely heavily on houses of this makeup. We may not have a decent representation of homes with more than one bedroom or bathroom.
+
+###Question 2:
+Next, we look at tables of the driveway, recreational room, full and finished basement, gas for hot water heating, central air conditioning and preferred neighborhood dummy variables, with a summary. We assign 0 to "no" and 1 to "yes."
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# Question 2
+# Tables of driveway, recreational room, full and finished basement, gas for hot water heating, central air conditioning, and preferred neighborhood dummy variables
+
+# Create dummy variables
+# Convert driveway into a dummy variable, follow same format for the remaining variables
+# Create a variable that is equal to 1 if condition is fair and zero otherwise
+HW3$DRV_dum  <- ifelse(HW3$DRV == "yes", 1, 0)
+HW3$REC_dum  <- ifelse(HW3$REC == "yes", 1, 0)
+HW3$FFIN_dum <- ifelse(HW3$FFIN == "yes", 1, 0)
+HW3$GHW_dum  <- ifelse(HW3$GHW == "yes", 1, 0)
+HW3$CA_dum   <- ifelse(HW3$CA == "yes", 1, 0)
+HW3$REG_dum  <- ifelse(HW3$REG == "yes", 1, 0)
+
+# Create a tables of dummy variables
+table(HW3$DRV_dum, dnn = "DRV")
+table(HW3$REC_dum, dnn = "REC")
+table(HW3$FFIN_dum, dnn = "FFIN")
+table(HW3$GHW_dum, dnn = "GHW")
+table(HW3$CA_dum, dnn = "CA")
+table(HW3$REG_dum, dnn = "REG")
+
+```
+
+From the tables of dummy variables, we see the summary of how many houses in the inventory have a given characeristic. Recall, "0" means "no" and "1" means "yes." It appears that the majority of houses do not have recreational rooms (449 without), have a driveway (469 with driveways), do not have a full and finished basement (355 without), do no have gas heat (521 without), do not have central air (373 without), and do not live in a preferred neighborhood (418 without).
+
+###Question 3:
+The Gauss-Markov assumptions for linear least squares regression are as follows:
+1. Linearity in Parameters
+2. Random Sampling
+3. Zero Conditional Mean of the errors
+4. No Perfect Collinearity
+
+For the benchmark model in Table III, the Benchmark parametric equation assumes linearity in parameters assumption. However, we may not be entirely confident that we've met the linearity assumptions in parameters and that we can transform all of the quations.
+
+This data was taken from the Windsor and Essex Real Estate Board for three months in 1987 through the local Multiple Listing Service; therefore, it meets the random sampling assumption if we are only interested in making predictions for this real estate population. However, it does not include houses that were not sold and their values. If we are only interested in studying the nature of the houses that were sold, this is a decent sample. Furthermore, if we are trying to extend our predictions to another real estate market, this would be a biased sample as it is a very confined geographic region with likely unique demographics.
+
+The third assumption states that anything that is not included in the regression model for prices of homes that may be associated with the outcome variable is also uncorrelated with the predictor variables. This is unlikely. For instance, the quality of the school district was not included in this model but would likely impact house price and be correlated with neighborhood.
+
+The fourth assumption, no perfect collinearity, is definitely met as R did not provide an "NA" or error message. It also doesn't seem intuitive that any of these variables would be perfectly collinear. 
+
+###Question 4:
+Next, we will look at the jackknife residuals versus fitted values for the benchmark regression using house prices rather than log house prices.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# Perform the regression using the house prices
+HW3.jack.reg <- lm(P ~ DRV + REC + FFIN + GHW + CA + GAR + REG + log.LOT + BDMS + FB
+                 + STY,
+                 data = HW3)
+
+# Plot the q-q plot of residuals to understand the range
+qqPlot(HW3.jack.reg,
+       pch = 19,
+       col = rgb(0, 0, 0, .3),
+       ylab = "Jackknife Residuals")
+
+
+# Plot the jackknife residuals versus fitted values for the benchmark regression using house prices rather than log house prices
+plot(jitter(fitted(HW3.jack.reg)), # Plot the fitted/predicted values
+     jitter(rstudent(HW3.jack.reg)), # Plot the jackknife residuals
+     xlab = "Fitted Values",
+     ylab = "Jackknife Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+abline(h = 0)
+```
+The zero conditional mean of the errors Gauss-Markov assumption seems
+to be met. It appears that on average, the residuals seem to be centered around zero for all fitted values.The residuals appear small, because the Jackknife residual is standardized and also removes the largest outlier.
+
+As the fitted values increase, the residuals spread out. Therefore, the higher the predicted price of the house, the greater the variability and error in our predictions. This could suggest a case ofheteroskedasticity.
+
+Next, we will look at the Box-Cox scheme to determine which value of lambda to use for the transformation of the house prices.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Perform a natural log transformation of the dependent variable
+HW3.bc <- boxCox(P ~ DRV + REC + FFIN + GHW + CA + GAR + REG + log.LOT + BDMS + FB
+                 + STY,
+                 data = HW3,
+                 family = "yjPower") # Use the Yeo-Johnson power family
+
+# Look for the ideal lambda
+HW3.bc.data <- data.frame(Lambda = HW3.bc$x,
+                          Likelihood = HW3.bc$y); HW3.bc.data
+
+lambda.y <- max(HW3.bc$y); lambda.y
+
+HW3.bc.data[2,]; HW3.bc.data[which(HW3.bc.data$Likelihood==lambda.y),] # access a row by [index,]
+
+```
+
+We can see that there is a flat maximum (Log-Likelihood = -6903)
+between lamda = -0.02 and lambda = 0.2. So, technically the log transform lambda = 0 is
+not the best in this case, but it is close. I might suggest using lambda = 0.101
+
+###Question 5:
+Next, we create a component plus residual plot for the untransformed lot size variable in the benchmark regression model, using log transformed house prices. When we do this, we assumed the other parameters have correct specifications.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+HW3.component.reg <- lm(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + LOT + BDMS + FB
+                 + STY, data = HW3)
+
+# Begin comparison plots
+
+plot(HW3$LOT, HW3$lnP,
+     pch = 19,
+     col = rgb(0, 0, 0, .5))
+
+# Plot the residual plus component against LOT
+plot(HW3$LOT, resid(HW3.component.reg) + coef(HW3.component.reg)[9]*HW3$LOT,
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     ylab = "Component + Residual")
+
+# Plot the model residual versus LOT
+plot(HW3$LOT, resid(HW3.component.reg),
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     ylab = "Residual")
+
+# Plot the component versus LOT
+plot(HW3$LOT, coef(HW3.component.reg)[2]*HW3$LOT,
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     ylab = "Component")
+
+library(car)
+crPlots(HW3.component.reg, terms = "LOT", pch = 19, col = rgb(0, 0, 0, .5))
+boxTidwell(HW3$lnP ~ HW3$LOT, other.x = ~ HW3$DRV + HW3$REC + HW3$FFIN + HW3$GHW + HW3$CA
+                   + HW3$GAR + HW3$REG + HW3$BDMS + HW3$FB + HW3$STY)
+
+
+```
+The first plot shows the marginal relationship between LOT and the transformed log of the price. The second plot shows that this relationship is not recovered by plotting the component plus residuals against LOT. The third plot shows the residuals plotted against LOT does not look quite like the marginal relationship between LOT and the transformed log of the price. The fourth plot shows the component plotted against LOT, which is a linear function as specified in the model. 
+
+We make a fifth plot with the component + residual against LOT. The red line indicates the linear relationship we are orignially suggesting and the green line is the actual data. This plot shows that we are underpredicting for small values of Lot Size and overpredicting for large values of Lot Size. This suggests a log transform (lambda = 0) or square root transform might be appropriate for Lot Size.
+
+The BoxTidwell function suggests a Lambda of -.33, which is not too far from 0, which also suggests a log transform or a square root transform is appropriate.
+
+Shown in the plot below is the regression performed again with the updated lambda value of -.33 and we find that the green (actual data) line is closer to the red (fitted) line, suggesting a better model. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Now plot the transformed LOT variable, raise it to the lambda from the box cox
+
+HW3$LOTlambda <- (HW3$LOT)^(-.33)
+
+HW3.component.reg2 <- lm(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + LOTlambda + BDMS + FB
+                 + STY, data = HW3)
+
+crPlots(HW3.component.reg2, terms = "LOTlambda", pch = 19, col = rgb(0, 0, 0, .5))
+
+
+```
+
+
+###Question 6:
+We will now look at the partial residual plot of the lot size variable from the GAM.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# Install proper package for the GAM
+install.packages("mgcv", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+library(mgcv)
+
+gam1 <- gam(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + s(LOT) + BDMS + FB
+                      + STY, data = HW3)
+
+plot(gam1, residuals = TRUE, shade = TRUE)
+
+```
+
+Similar to a log transform or square root transform of Lot Size, we see from the GAM model that the Price increases rapidly for smaller values of Lot Size and then begins to plateau as the Lot Size values increase. This suggests a log transform or a square root transform of the variable, similar to the component plus residual and Box-Tidwell plot.
+
+###Question 7:
+For the forecasting story, we compare the benchmark model (Table III) with the semi-parametric model (GAM) and the lamda = -.33 transform (suggested from the Box-Tidwell transform).
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Set the benchmark, GAM, and Box Tidwell variables
+benchmark <- c()
+Gam       <- c()
+BoxT      <- c()
+
+# Run this simulation 1,000 times to get a rMSE mean and meadians
+# Perform cross-validation
+# Sample 2/3 of the cell ids from the log_wage data w/out replacement
+# This is our training data
+
+
+for(i in 1:1000){
+# First, assign cell ids to HW3 dataframe
+cell_id <- c(1:length(HW3$P))
+
+# Append cell ids to HW3
+HW3 <- cbind(HW3, cell_id)
+
+# Sample from the HW3 dataframe
+set.seed(10)
+train <- sample(HW3$cell_id, # Sample the benchmark values
+                2*length(HW3$cell_id)/3, # Sample 2/3 of these values
+                replace = FALSE) # Sample w/out replacement
+# Create "test" data that are the benchmark values not selected
+test <- HW3$cell_id[ - train]
+
+# Run linear regression
+# Subset the data to only select rows where the logP values 
+# are "in" (%in%) the training data
+benchmark.train <- lm(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + log.LOT + BDMS + FB
+                      + STY, data = HW3[HW3$cell_id %in% train, ])
+
+Gam.train       <- gam(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + s(LOT) + BDMS + FB
+                      + STY, data = HW3[HW3$cell_id %in% train, ])
+
+BoxT.train      <- lm(lnP ~ DRV + REC + FFIN + GHW + CA + GAR + REG + LOTlambda + BDMS + FB
+                      + STY, data = HW3[HW3$cell_id %in% train, ])
+
+
+# Find the regression predictions and
+# calculate the squared difference for all predictions on the third line
+benchmark.test <- (HW3$lnP[HW3$cell_id %in% test] - 
+                     predict(benchmark.train, HW3[HW3$cell_id %in% test, ]))^2
+
+Gam.test       <- (HW3$lnP[HW3$cell_id %in% test] -
+                     predict(Gam.train , HW3[HW3$cell_id %in% test, ]))^2
+
+BoxT.test      <- (HW3$lnP[HW3$cell_id %in% test] -
+                     predict(BoxT.train, HW3[HW3$cell_id %in% test, ]))^2
+
+# Calculate the rMSE for the three regressions
+benchmark.rMSE <- sqrt(sum(benchmark.test) / length(benchmark.test))
+Gam.rMSE       <- sqrt(sum(Gam.test) / length(Gam.test))
+BoxT.rMSE      <- sqrt(sum(BoxT.test) / length(BoxT.test))
+
+benchmark <- append(benchmark, benchmark.rMSE)
+Gam       <- append(Gam, Gam.rMSE)
+BoxT      <- append(BoxT, BoxT.rMSE)
+}
+
+print("benchmark")
+summary(benchmark)
+
+print("Semi-parametric (GAM)")
+summary(Gam)
+
+print("Lambda = -.33")
+summary(BoxT)
+
+```
+
+We compare the mean and median values of the rMSE for the benchmark, semi-parametric (GAM), and the lambda = -.33 model. It seems the Semi-parametric performs better than the Lambda = -.33 model, as the rMSE is smaller and closer to the benchmark. However, they are very close to each other. The model with the lowest rMSE (both median and mean) is the best performing model.
+
+###Question 8:
+In this section we compare the heteroskedasticity robust standard error estimates to "classical" standard error estimates for the benchmark model in Table III with log transformed house prices.
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Check this estimate with the Sandwhich package
+install.packages("sandwich", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("lmtest", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+library(sandwich)
+library(lmtest)
+
+# There's a bunch of different heteroskedasticity robust estimators
+# Here we use HC0, the others have different corrections
+robust.table <- coeftest(HW3.TableIII.reg, 
+                         vcov = vcovHC(HW3.TableIII.reg, type = "HC0"),
+                         df = df.residual(HW3.TableIII.reg))[,2] 
+                          # residual df is n - number of parameters
+
+# Compare to the "classical" standard errors
+classical.se <- summary(HW3.TableIII.reg)$coefficients[,2]
+robust.table <- cbind(robust.table, classical.se)
+
+colnames(robust.table) <- c("Robust", "Classical")
+
+# Print table
+robust.table
+
+
+
+```
+It appears we are dealing with a homoskedastic case as the robust standard errors (found computationally and using Sandwhich) are about the same as the classical standard
+error. This suggests there is no model misspecification.
+
+###Question 9:
+To make a statistical inference, we must be confident the sample is random and representative of the population we are interested in studying. If we are only interested in makeing predictions within this real estate market of sold houses, we can use this sample to make statistical inferences. However, this sample is not random or representative if we are interested in making statistical inferences outsie of this housing market.
+
+To make causal claims, we want randomized, control trials. This data does not represent randomized control trials and, therefore, we do not have much of a causal story.

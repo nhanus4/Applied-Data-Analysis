@@ -1,0 +1,996 @@
+---
+title: "HW 5_Hanus"
+output: html_document
+date: "4/20/15"
+
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Set the directory
+setwd("~/19-704/Homeworks/Homework 5")
+
+# Install required libraries and packages
+install.packages("AER")
+install.packages("mlmRev", repos = "http://lib.stat.cmu.edu/R/CRAN")
+install.packages("arm", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("multiwayvcov")
+install.packages("HLMdiag", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+library(AER)
+library(MASS)
+library(plyr)
+library(mlmRev)
+library(arm)
+library(foreign)
+library(car)
+
+
+
+# Read in data
+data(Exam, package = "mlmREV")
+head(Exam)
+
+# Make a copy of the data 
+HW5 <- Exam
+
+# Transform some factors to numerics
+HW5$school.num  <- as.numeric(HW5$school)
+
+
+
+
+```
+#HW 5 - Multi-Level Models
+
+##1. Histograms and Tables
+
+We begin the 5 stories by developing histograms of:
+1. The number of students in each school
+2. Avg. London Reading Test (LRT) Intake Scores
+3. Standardized LRT Intake Scores
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Plot histograms of 
+# 1. The number of students in each school
+# 2. Avg. London Reading Test (LRT) Intake Scores
+# 3. Standardized LRT Intake Scores
+
+hist(HW5$school.num,
+     ylim = c(0, 750), # the y axis ranges from 0 to 4,000
+     xlim = c(0, 65), # the x axis ranges from 0 to 65
+     main = "No. of Students in Each School", # The main title 
+     breaks = "FD", # Use the "bins" vector to determine the x axis bins
+     xlab = "")
+
+hist(HW5$schavg,
+     ylim = c(0, 750),
+     xlim = c(0, 0.7),
+     main = "Avg. London Reading Test Intake Score per School", 
+     breaks = "FD", 
+     xlab = "")
+
+
+
+
+```
+
+We find that the number of students in each school is relatively uniform. There does seem to be a minor tendency for schools to be between size 10-20 students.
+
+There does not seem to be a discernable trend for the Average London Reading Test (LRT) score of each school. It appears that many schools did not take this test, indicated by the high frequency of zeros. 
+
+Standardized Intake Scores seem to have a log-normal distribution or a cube or square in the denominator. 
+
+Next, we look at the tables of:
+1. School gender types
+2. Verbal reasoning subscores at intake
+3. Overall LRT scores at intake
+4. Student's gender
+5. Type of schools
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Print tables of variables with "dnn" indicating the title
+
+table(HW5$schgend, dnn = "School Gender")
+table(HW5$vr,      dnn = "Verbal Reasoning Subscores at Intake")
+table(HW5$intake,  dnn = "Overall LRT Scores at Intake")
+table(HW5$sex,     dnn = "Student's Gender")
+table(HW5$type,    dnn = "School Type")
+
+```
+
+From the tables, we see that the majority of schools are mixed (as expected). Furthermore, the majority of subscores for the LRT were within the mid 50%. There are more students scoring in the top 25% than the bottom 25%, though. Following a somewhat similar pattern is the Overall LRT Score at Intake, which shows the majority of scores falling in the 50%. Overall, there are a greater number of girls than boys. In fact, there are nearly 1.5x more girls than boys. This is shown previously as there were only 513 boys-only schools compared to 1377 girls-only schools. The Mixed vs. Single school type is previously represented in the "School Gender" table. 
+
+##2. Complete, No, and Partial Pooling Regressions
+
+Next, we look at complete, no, and partial pooling regressions of the GCSE exam scores using only an intercept. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Make dataframe for regressions
+y     <- HW5$normexam
+group <- HW5$school
+
+data  <- data.frame(y = y, group = group)
+
+# Complete Pooling Regression
+completepool1 <- lm(y ~ 1, data = data)
+
+
+# Make predictions for the intercept for each group
+# With 95% CI
+prd <- predict(completepool1,
+               newdata = data.frame(group = group),
+               interval = c("confidence"),
+               level = 0.95, type = "response")
+
+# Plot the predictions
+# Plot first 10
+plot(as.factor(group), y,
+     xlim = c(0, 10),
+     pch = 19,
+     col = rgb(0, 0, 0, .2),
+     ylab = "GSCE Score",
+     xlab = "Group",
+     ylim = c(-4, 4))
+points(group, y,
+       pch = 20,
+       col = rgb(0, 0, 1, .3))
+abline(h = coef(completepool1), col = "red",
+       lty = 2, lwd = 4)
+abline(h = 1, col = "blue", lwd = 4)
+lines(group, prd[, 2], col = "red", lty = 2, 
+      lwd = 2)
+lines(group, prd[, 3], col = "red", lty = 2,
+      lwd = 2)
+
+
+# Plot 11 - 20
+plot(as.factor(group), y,
+     xlim = c(11, 20),
+     pch = 19,
+     col = rgb(0, 0, 0, .2),
+     ylab = "GSCE Score",
+     xlab = "Group",
+     ylim = c(-4, 4))
+points(group, y,
+       pch = 20,
+       col = rgb(0, 0, 1, .3))
+abline(h = coef(completepool1), col = "red",
+       lty = 2, lwd = 4)
+abline(h = 1, col = "blue", lwd = 4)
+lines(group, prd[, 2], col = "red", lty = 2, 
+      lwd = 2)
+lines(group, prd[, 3], col = "red", lty = 2,
+      lwd = 2)
+
+
+
+# Plot 21 - 30
+plot(as.factor(group), y,
+     xlim = c(21, 30),
+     pch = 19,
+     col = rgb(0, 0, 0, .2),
+     ylab = "GSCE Score",
+     xlab = "Group",
+     ylim = c(-4, 4))
+points(group, y,
+       pch = 20,
+       col = rgb(0, 0, 1, .3))
+abline(h = coef(completepool1), col = "red",
+       lty = 2, lwd = 4)
+abline(h = 1, col = "blue", lwd = 4)
+lines(group, prd[, 2], col = "red", lty = 2, 
+      lwd = 2)
+lines(group, prd[, 3], col = "red", lty = 2,
+      lwd = 2)
+
+
+
+# Plot 31 - 40
+plot(as.factor(group), y,
+     xlim = c(31, 40),
+     pch = 19,
+     col = rgb(0, 0, 0, .2),
+     ylab = "GSCE Score",
+     xlab = "Group",
+     ylim = c(-4, 4))
+points(group, y,
+       pch = 20,
+       col = rgb(0, 0, 1, .3))
+abline(h = coef(completepool1), col = "red",
+       lty = 2, lwd = 4)
+abline(h = 1, col = "blue", lwd = 4)
+lines(group, prd[, 2], col = "red", lty = 2, 
+      lwd = 2)
+lines(group, prd[, 3], col = "red", lty = 2,
+      lwd = 2)
+
+
+
+# Plot 41 - 50
+plot(as.factor(group), y,
+     xlim = c(41, 50),
+     pch = 19,
+     col = rgb(0, 0, 0, .2),
+     ylab = "GSCE Score",
+     xlab = "Group",
+     ylim = c(-4, 4))
+points(group, y,
+       pch = 20,
+       col = rgb(0, 0, 1, .3))
+abline(h = coef(completepool1), col = "red",
+       lty = 2, lwd = 4)
+abline(h = 1, col = "blue", lwd = 4)
+lines(group, prd[, 2], col = "red", lty = 2, 
+      lwd = 2)
+lines(group, prd[, 3], col = "red", lty = 2,
+      lwd = 2)
+
+
+
+# Plot 51 - 60
+plot(as.factor(group), y,
+     xlim = c(51, 60),
+     pch = 19,
+     col = rgb(0, 0, 0, .2),
+     ylab = "GSCE Score",
+     xlab = "Group",
+     ylim = c(-4, 4))
+points(group, y,
+       pch = 20,
+       col = rgb(0, 0, 1, .3))
+abline(h = coef(completepool1), col = "red",
+       lty = 2, lwd = 4)
+abline(h = 1, col = "blue", lwd = 4)
+lines(group, prd[, 2], col = "red", lty = 2, 
+      lwd = 2)
+lines(group, prd[, 3], col = "red", lty = 2,
+      lwd = 2)
+
+
+
+# Plot 61 - 65
+plot(as.factor(group), y,
+     xlim = c(61, 65),
+     pch = 19,
+     col = rgb(0, 0, 0, .2),
+     ylab = "GSCE Score",
+     xlab = "Group",
+     ylim = c(-4, 4))
+points(group, y,
+       pch = 20,
+       col = rgb(0, 0, 1, .3))
+abline(h = coef(completepool1), col = "red",
+       lty = 2, lwd = 4)
+abline(h = 1, col = "blue", lwd = 4)
+lines(group, prd[, 2], col = "red", lty = 2, 
+      lwd = 2)
+lines(group, prd[, 3], col = "red", lty = 2,
+      lwd = 2)
+
+```
+
+From looking at the Complete Pooling regressions of the 65 schools, we see that the average is centered around zero, as specified in the Goldstein paper.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# No Pooling
+
+# Treat each school separately 
+# Make an empty data from to store
+# the regression results for each school
+
+no.pool <- data.frame (int         = rep(NA, 65),
+                       std.error   = rep(NA, 65),
+                       school      = unique(HW5$school),
+                       sample.size = rep(NA, 65))
+
+for(i in unique(HW5$school)) {
+  # Conduct the regression for data only in school i
+  NormExamReg.np <- lm(normexam ~ 1, data = HW5[HW5$school == i, ])
+  
+  # Pull out the no pooling intercept
+  no.pool$int[no.pool$school == i] <- coef(NormExamReg.np)
+  
+  # Pull out the no pooling standard error for the intercept
+  no.pool$std.error[no.pool$school == i] <- coef(summary(NormExamReg.np))[1, 2]
+  
+  # Pull out the sample size for that school
+  no.pool$sample.size[no.pool$school == i] <- nrow(HW5[HW5$school == i, ])
+}
+summary(NormExamReg.np)
+
+# The parameter estimates in the no pooling regression should be the same as
+# if we use a dummy variable for each school in the regression:
+
+NormExamReg.2 <- lm(normexam ~ factor(school) - 1, data = HW5)
+summary(NormExamReg.2)
+
+```
+
+We run the no pooling regression separately versus the dummy coded schools and find that the intercepts are the same but the standard errors are different. We cannot measure a standard error for school with only one observation (i.e. running separate regressions). The dummy coded regression provides us an overall error term.
+
+Next, we plot the no pooling regression.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Plot the no pooling regression
+plot(no.pool$sample.size, no.pool$int,
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     ylim = c(-2, 2),
+     ylab = "Sample Mean of GCSE Scores",
+     xlab = "Sample Size in School")
+abline(h = median(HW5$normexam))
+# Plot the standard errors for each school's mean GSCE score
+for(j in no.pool$school){
+  # Make a line that connects the standard error endpoints
+  lines(
+    # The two x-values are just the sample size for school j
+    rep(no.pool$sample.size[no.pool$school == j], 2),
+    # The two y-values are the point estimate
+    no.pool$int[no.pool$school == j] +
+      # Plus or minus one standard error
+      c(-1, 1)*no.pool$std.error[no.pool$school == j],
+    lwd = 0.5)
+}
+
+# Plot the q-q plots of the No Pooling Regression, not using the dummy
+qqPlot(no.pool$int,
+       pch = 19,
+       col = rgb(0, 0, 0, .3),
+       ylab = "No Pooling Intercepts, without dummy")
+
+# Plot the q-q plots of the No Pooling Regression, using the dummy
+qqPlot(coef(NormExamReg.2),
+       pch = 19,
+       col = rgb(0, 0, 0, .3),
+       ylab = "No Pooling Intercepts, with dummy")
+
+
+```
+
+From our No Pooling plot, we see that as the sample size in the schools increase, the standard error bars become smaller. Furthermore, we have one outlier in the school size (sample size of ~ 200). The majority of school are around 50 students. Still, we see form this plot that the average GSCE score is centered around 0 as it was in the Completely Pooled plot. It does seem, however, that the schools of smaller size tend to do worse than the mean. 
+
+In the q-q plot of the No Pooling, we see it is relatively normally distributed. However, the right end falls outside of the 95% confidence interval, indicating a heavy tail. This suggests some GSCE scores may be falling far from the complete pooling mean. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Partial Pooling
+
+# (1|school) indicates that we should estimate partially pooled
+# school-level intercepts
+NormExamReg.3 <- lmer(normexam ~ 1 + (1|school), data = HW5)
+summary(NormExamReg.3)
+
+# Plot the q-q plots of the Partial Pooling Regression
+qqPlot(coef(NormExamReg.3)$school,
+       pch = 19,
+       col = rgb(0, 0, 0, .3),
+       ylab = "Partial No Pooling Intercepts")
+
+```
+
+Here we get an overall GSCE average of -0.013, similar to the Complete Pooling (very close to zero).
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Get the county-level mean directly using the coef()
+# function:
+print("Partial Pooling intercept, first school")
+as.matrix(coef(NormExamReg.3)$school)[1]
+
+# Take out the No-pooling intercept for the first school
+print("No Pooling intercept, first school")
+no.pool$int[1]
+
+# Get the maximum and minimum school-level GSCE scores from the partial-pooling
+max(ranef(NormExamReg.3)$school)
+min(ranef(NormExamReg.3)$school)
+
+# Find the average, largest, and smallest GCSE scores from the no-pooling reg
+mean(no.pool$int)
+max(no.pool$int)
+min(no.pool$int)
+
+```
+
+For the partial-pooling regression, we see that the largest school-level GSCE score is 0.94 and the smallest GSCE school-level GSCE score -0.94. This is rather tight and centered around zero. This is smilar to the max and min scores of the no-pooling regression, which are 1.00 and -1.05, respectively. 
+
+We look at school one as our example for fitted intercepts. Using No Pooling, we have an intercept of 0.501. For Partial Pooling, we have an intercept of 0.467. 
+
+
+##3. Comparisons of Partially Pooled Intercepts
+The partially pooled school intercepts will be close to the complete pooling estimate when the number of students in each school is small, when the variation of scores within the schools is large after accounting for the school mean, and when the variation between school test means is small. The partially pooled school intercepts will be close to the no pooling estimate when the number of students in each school is large (e.g. more weight in the no pooling scenario), when the variation of scores wtihin the schools is small after accounting for the school mean, and when the variation between school tests means is large.
+
+##4. Intake Score on LRT as Predictor
+Next, we use the student's standardized intake score on the London Reading Test at age 11 as a predictor to the complete, no, and partial pooling regressions. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Using standardized intake score on the LRT as a predictor
+
+# Complete Pooling Regression
+LRTreg.cp <- lm(normexam ~ standLRT, data = HW5)
+
+# No Pooling Regression
+LRTreg.np <- lm(normexam ~ standLRT + factor(school) - 1, data = HW5)
+
+# Partial Pooling Regression
+LRTreg.pp <- lmer(normexam ~ standLRT + (1|school), data = HW5)
+
+# Compare these intercepts to before the predictor was added
+
+# Compare the complete, no, and partial pooling regressions
+# Plot the complete, no, and partial pooling regressions
+# Grab data for the first 6 schools for the plotting
+plot1 <- HW5[HW5$school %in% unique(HW5$school)[1: 6], ]
+plot1 <- droplevels(plot1)
+
+j <- 1
+# For each unique school ID
+for(i in unique(plot1$school)){
+  # Plot the Norm Exam measurements by LRT scores
+  plot(jitter(plot1$standLRT[plot1$school == i], amount = 0.05),
+       plot1$normexam[plot1$school == i],
+       pch = 19,
+       col = rgb(0, 0, 0, .5),
+       xaxt = "n",
+       xlab = "standLRT",
+       ylab = "Norm Exam",
+       main = i,
+       cex = 2)
+ # Add the complete pooling regression line 
+ abline(coef(LRTreg.cp)[1], coef(LRTreg.cp)[2],
+        lty = 2,
+        lwd = 2)
+ # Add the no pooling intercept and slope
+ # The slope is the first coefficient
+ # so we need to advance j by one
+ abline(coef(LRTreg.np)[j+1],
+        coef(LRTreg.np)[1],
+        lty = 1,
+        lwd = 2)
+ j <- j + 1
+ 
+}
+
+
+
+
+```
+
+We see from these plots that the No Pooling and Complete Pooling lines are not equal for each of the schools. The partially pooled school intercepts will be close to the complete pooling estimate when the number of students in each school is small, when the variation of scores within the schools is large after accounting for the school mean, and when the variation between school test means is small.
+  
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}  
+
+# Compare the intercepts to intercepts from before predictor
+
+# Complete Pooling
+# Before predictor
+print("Before Predictor, Complete Pooling")
+coef(completepool1)[1]
+
+# After predictor
+print("After Predictor, Complete Pooling")
+round(coef(LRTreg.cp)[1], digits = 3)
+
+# No pooling intercepts
+# Before Predictor
+print("Before Predictor, No Pooling")
+print("Max")
+max(no.pool$int)
+print("Min")
+min(no.pool$int)
+print("mean")
+mean(no.pool$int)
+
+# After Predictor
+# Store intercepts into a dataframe
+LRTreg.npDF <- data.frame (int    = rep(NA, 65),
+                           school = unique(HW5$school))
+
+j <- 1
+for(i in unique(HW5$school)) {
+  
+  # Pull out the no pooling intercept
+  LRTreg.npDF$int[LRTreg.npDF$school == i] <- coef(LRTreg.np)[j + 1]
+  
+  j <- j + 1
+  
+}
+print("After Predictor, No Pooling")
+print("Max")
+max(LRTreg.npDF$int)
+print("Min")
+min(LRTreg.npDF$int)
+print"mean")
+mean(LRTreg.npDF$int)
+
+# Partial pooling
+# Before Predictor
+print("Before Predictor, Partial Pooling")
+print("Max")
+max(ranef(NormExamReg.3)$school)
+print("Min")
+min(ranef(NormExamReg.3)$school)
+summary(NormExamReg.3)$coef
+
+# After predictor
+print("After Predictor, Partial Pooling")
+print("Max")
+max(ranef(LRTreg.pp)$school)
+print("Min")
+min(ranef(LRTreg.pp)$school)
+summary(LRTreg.pp)$coef
+
+```
+
+In the complete pooling case, both the "with predictor" and "without predictor" intercepts are very close to zero. This is to be expected, as it was explained to be centered around zero in the paper. This suggests that adding a predictor to the complete pooling case does not have much of an effect.
+
+In the no pooling case, the "without predictor" case has a little more variance as the intercepts range from -1 to 1. In the "with predictor" case, the range reduces to -.96 to .79. Still, both are centered around zero. It seems that adding a predictor to the no pooling case does reduce variance. The mean intercept value before the predictor is -0.0226. The mean intercept value after the predictor is -0.005. It seems the predictor improves the intercepts (e.g. closer to zero). 
+
+The partial pooling case has the least amount of variance in both the cases, with the predictor and without the predictor. The predictor does reduce the variance even more to 0.72 and -.66. This suggests that the predictor does improve our estimate as it is tightens it around zero. The mean intercept value before the predictor is -0.0132. The mean intercept after the predictor is 0.00232. 
+
+     
+     
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Look for potential correlation between the student's standardized intake score and the school level intercepts
+
+# Complete pooling slope is the second coefficient
+print("Complete Pooling Slope")
+round(coef(LRTreg.cp)[2], digits = 3)
+
+# No pooling slope is the first coefficient
+print("No Pooling Slope")
+round(coef(LRTreg.np)[1], digits = 3)
+
+# Partial pooling slope is the second coefficient
+print("Partial Pooling Slope")
+round(fixef(LRTreg.pp)[2], digits = 3)
+```
+
+We find that the slope is steeper in the complete pooling regression (0.595) than the no pooling regression indicating (0.559) that there is some correlation between the school-level GSCE exam scores and the London Reading Test. 
+
+## 5. LRT Intake Score as Group-level Predictor
+Next, we will look at the average London Reading Test intake score for the school as a group-level predictor in a multi-level model.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Pull out the intercepts of the no pooling
+LRTreg.npint <- summary(LRTreg.np)$coef[-1,1]
+
+# Regress the no pooled intercepts onto school average
+avgLRT <- unique(HW5$schavg)
+schavg.reg <- lm(avgLRT ~ LRTreg.npint)
+
+# Add LRT as a group-level predictor to the partial pooling
+lmer.avgLRT <- lmer(normexam ~ standLRT + schavg + (1|school), data = HW5)
+summary(lmer.avgLRT)
+
+# Pull out slope of the LRT school average to write fitted regression for school
+round(fixef(lmer.avgLRT)[2], digits = 3)
+
+# Plot the regression line of the avg LRT scores against the
+# partially pooled intercepts
+
+# First, look at partially pooled intercepts
+rownames <- rownames(ranef(lmer.avgLRT)$school)
+
+u.pool <- data.frame(int       = rep(NA, 65),
+                    std.error = rep(NA, 65),
+                    school    = rownames,
+                    avgLRT    = avgLRT)
+
+# The partially pooled intercept is the overall intercept (fixef)
+u.pool$int <- fixef(lmer.avgLRT)[1]
+
+# Plus the random intercept (ranef(lmer.u))
+u.pool$int <- u.pool$int + unlist(ranef(lmer.avgLRT))
+
+# Plus the prediction based on LRT scores at the school level
+u.pool$int <- u.pool$int + fixef(lmer.avgLRT)[3]*u.pool$avgLRT
+
+# Get the standard error of the partially pooled intercept
+u.pool$std.error <- unlist(se.ranef(lmer.avgLRT))
+
+plot(u.pool$avgLRT,
+     u.pool$int,
+     pch = 20,
+     col = rgb(0, 0, 0, .5),
+     ylab = "Partially Pooled GSCE Score",
+     xlab = "School-Level LRT Score")
+abline(fixef(lmer.avgLRT)[1], fixef(lmer.avgLRT)[3])
+
+# Plot the no pooling intercepts
+plot(u.pool$avgLRT,
+     LRTreg.npint,
+     pch = 20,
+     col = rgb(0, 0, 0, .5),
+     ylab = "No Pooled GSCE Score",
+     xlab = "School-Level LRT Score")
+abline(schavg.reg)    
+
+
+```
+
+## 6. extend the previous model for intake score vary 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Allow the standardized intake score to vary at the school level
+LRTreg2.pp <- lmer(normexam ~ standLRT + schavg + (1 + standLRT|school), data = HW5)
+summary(LRTreg2.pp)
+
+```
+
+Discuss the fitted line
+
+## 7. Level 1 diagnostics 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+
+# Fit complete pooling regression 
+LS.resids1 <- lm(normexam ~ standLRT + schavg, data = HW5)
+
+# Plot the fitted versus residuals
+plot(fitted(LS.resids1), rstudent(LS.resids1),
+     xlab = "Fitted Values",
+     ylab = "Jackknife LS Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+# Add lowess smooth
+lines(lowess(fitted(LS.resids1), rstudent(LS.resids1)),
+      col = "green", lwd = 2)
+abline(h = 0, lty = 2, col = "red", lwd = 2)
+
+plot(HW5$standLRT, rstudent(LS.resids1),
+     xlab = "Standard LRT",
+     ylab = "Jackknife LS Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+lines(lowess(HW5$standLRT, rstudent(LS.resids1)),
+      col = "green", lwd = 2)
+abline(h = 0, lty = 2, col = "red", lwd = 2)
+
+plot(HW5$schavg, rstudent(LS.resids1),
+     xlab = "School Average",
+     ylab = "Jackknife LS Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+lines(lowess(HW5$schavg, rstudent(LS.resids1)),
+      col = "green", lwd = 2)
+abline(h = 0, lty = 2, col = "red", lwd = 2)
+
+qqPlot(LS.resids1, id.n = 3,
+       distribution = "t",
+       df = df.residual(LS.resids1),
+       ylab = "Jackknife LS Residuals")
+
+
+# Look at an interaction between standLRT and schavg
+# Fit complete pooling regression 
+LS.resids2 <- lm(normexam ~ standLRT*schavg, data = HW5)
+
+# Plot the fitted versus residuals
+plot(fitted(LS.resids2), rstudent(LS.resids2),
+     xlab = "Fitted Values",
+     ylab = "Jackknife LS Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+# Add lowess smooth
+lines(lowess(fitted(LS.resids2), rstudent(LS.resids2)),
+      col = "green", lwd = 2)
+abline(h = 0, lty = 2, col = "red", lwd = 2)
+
+plot(HW5$standLRT, rstudent(LS.resids2),
+     xlab = "Standard LRT",
+     ylab = "Jackknife LS Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+lines(lowess(HW5$standLRT, rstudent(LS.resids2)),
+      col = "green", lwd = 2)
+abline(h = 0, lty = 2, col = "red", lwd = 2)
+
+plot(HW5$schavg, rstudent(LS.resids2),
+     xlab = "School Average",
+     ylab = "Jackknife LS Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+lines(lowess(HW5$schavg, rstudent(LS.resids2)),
+      col = "green", lwd = 2)
+abline(h = 0, lty = 2, col = "red", lwd = 2)
+
+qqPlot(LS.resids2, id.n = 3,
+       distribution = "t",
+       df = df.residual(LS.resids2),
+       ylab = "Jackknife LS Residuals")
+
+
+# Look at the diagnostics plot
+influenceIndexPlot(LS.resids2, id.n = 5)
+
+
+# Look at box cox of norm exam against stand LRT and school avg
+boxcox1 <- boxCox(normexam ~ schavg + standLRT, 
+                  data = HW5,
+                  family = "yjPower")
+
+
+```
+
+The Box Cox appears to have a lambda of 1, indiciating no transformation is needed for the dependent variable. The previous residual plots also indicate that no transformation is needed on the independent variable. The interaction between school avg and standardized LRT does not seem to make much of an impact.
+
+## 8. Level 2 Diagnostics
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+
+library(HLMdiag)
+# Get the empirical Bayes residuals
+EB.resids <- HLMresid(LRTreg2.pp, level = "school", type = "EB")
+
+hist(EB.resids[, 1],
+     breaks = "FD",
+     xlab = "Empirical Bayes Intercepts",
+     main = "")
+
+hist(EB.resids[, 2],
+     breaks = "FD",
+     xlab = "Emperical Bayes Slopes",
+     main = "")
+
+# Plot the school avg values against the intercept residuals
+plot(unique(HW5$schavg), EB.resids[, 1],
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     xlab = "School-level LRT",
+     ylab = "Empirical Bayes Intercept Residuals")
+abline(h = 0, col = "red", lty = 2)
+lines(lowess(unique(HW5$schavg), EB.resids[, 1]),
+      col = "green", lwd = 2)
+
+# Plot the log uranium values against the slope residuals
+plot(unique(HW5$schavg), EB.resids[, 2],
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     xlab = "School-level LRT",
+     ylab = "Empirical Bayes Slope Residuals")
+abline(h = 0, col = "red", lty = 2)
+lines(lowess(unique(HW5$schavg), EB.resids[, 2]),
+      col = "green", lwd = 2)
+
+
+qqPlot(EB.resids[, 1], id.n = 3,
+       ylab = "Empirical Bayes Intercept Residuals",
+       xlab = "Normal Quantiles")
+
+qqPlot(EB.resids[, 2], id.n = 3,
+       ylab = "Empirical Bayes Slope Residuals",
+       xlab = "Normal Quantiles")
+```
+     
+We do not see much in terms of heterskedasticity in either of the Bayes Intercepts and Bayes slopes plots. 
+
+## 9. Comparison of Pooling Dummy Variable with Partial Pooling
+     
+     
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# No pooling dummy variable Version of the revised model
+RevisedDummy.np <- lm(normexam ~ standLRT + schavg + factor(school) - 1, data = HW5)
+
+# Partial pooling version of the revised model
+LRTreg2.pp <- lmer(normexam ~ standLRT + schavg + (1 + standLRT|school), data = HW5)
+
+
+# Heteroskedasticity standard errors
+
+
+
+# Cluster-robust standard errors
+# Specify the clustering variable
+HW5$school <- droplevels(HW5$school)
+cluster <- HW5$school
+
+# The sandwich library gives us a couple handy functions
+library(sandwich)
+
+
+# First, do the No Pooling Case
+
+# Sum the (y-b.hat*x)*x over each cluster for each column
+z.np <- apply(estfun(RevisedDummy.np), 2,
+           function(x) tapply(x, cluster, sum))
+meat.np <- t(z.np) %*% z.np
+
+# Get the "bread" which is n*(x'x)^-1 so we need to divide by n
+bread.np <- bread(RevisedDummy.np)/nrow(HW5)
+
+# Use the sandwich formula to get the cluster-robust variance
+sandwich.varianceNP <- (bread.np %*% meat.np %*% bread.np)
+
+
+# Robust variance matrix
+library(lmtest)
+coeftest(RevisedDummy.np, vcov = sandwich.varianceNP)
+
+# Robust vcov matrix using cluster.vcov
+library(multiwayvcov)
+vcovCL.NP <- cluster.vcov(RevisedDummy.np,
+                          HW5$school,
+                          df_correction = FALSE)
+coeftest(RevisedDummy.np, vcovCL.NP)
+
+# OLS standard errors
+print("No Pooling Cluster-Robust Errors")
+summary(RevisedDummy.np)
+
+# Get the classical homoskedastic standard errors
+classical.np <- coef(summary(RevisedDummy.np))
+
+```
+
+
+
+
+
+Next, we look at the Partial Pooling Case
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# Next, do the Partial Pooling Case
+# Partially pooled standard errors
+partial.pool <- coef(summary(LRTreg2.pp))
+
+# Compare to the cluster-robust standard errors of the complete pooling
+# Get robust standard errors
+LRTreg2.cp <- lm(normexam ~ standLRT + schavg, data = HW5)
+robust.cp <- sqrt(cluster.vcov(LRTreg2.cp, HW5$school))
+
+print("Look at intercept")
+robust.cp[1, 1]/partial.pool[1, 2]
+
+print("Look at standLRT regressor")
+robust.cp[2, 2]/partial.pool[2, 2]
+
+print("Look at schavg regresso")
+robust.cp[3, 3]/partial.pool[3, 2]
+
+```
+
+When comparing the standard errors from the partial pooling model to the cluster-robust standard errors, we see a difference of 5% (1-0.947) between the partial pooling and cluster-robust standard errors of the standLRT regressor. We see a difference of -14% between the partial pooling and cluster-robust standard errors of the schAVG regressor. This should be due to heteroskedasticity. There is a difference of -1.8% betwen the partial pooling and cluster-robust standard error of the intercept. However, we note the differences between the cluster-robust and partial pooling standard errors are less than 10% for the standLRT regressor and intercept. 
+
+
+# 10. Level 1 and Level 2 Leave-one-out-cross-validation
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Level 1 Leave-one-out-cross-validation
+simple  <- c()
+complex <- c()
+
+```
+
+the below for loop seems to go forever
+
+for(i in 1:nrow(HW5)){
+# Train complex model dropping the ith observation
+lmer.complex <- lmer(normexam ~ standLRT + schavg + (1 + standLRT|school), data = HW5[-i, ])
+
+# Find the school from the dropped observation
+school <- which(rownames(coef(lmer.complex)$school) == HW5$school[i])
+
+# Let's break down the prediction into each of its parts
+# There's the random intercept
+rand.int <- coef(lmer.complex)$school[school, 1]
+
+# Plus the school-level LRT prediction of the intercept
+schavg.int <- coef(lmer.complex)$school[1, 3]*HW5$schavg[i]
+
+# Plus the random slope
+rand.slope <- coef(lmer.complex)$school[school, 2]*HW5$standLRT[i]
+
+# Plus the school-level LRT prediction of the slope
+schavg.slope <- prod(coef(lmer.complex)$school[1, 4],
+                   HW5$standLRT[i],
+                   HW5$schavg[i])
+
+# The prediction is the sum of these four components
+pred.comp <- rand.int + schavg.int + rand.slope + schavg.slope
+
+# Calculate the squared residual
+comp.sq.resid <- (HW5$normexam[i] - pred.comp)^2
+
+
+# Add the squared residual to the cv vector
+complex <- append(complex, comp.sq.resid)
+
+# Train simple model dropping the ith observation
+lmer.simple <- lmer(normexam ~ standLRT + schavg + (1|school),
+                    data = HW5[-i, ])
+
+# There's the random intercept
+rand.int <- coef(lmer.simple)$school[school, 1]
+
+# Plus the school-level  LRT prediction of the intercept
+schavg.int <- coef(lmer.simple)$school[1, 3]*HW5$schavg[i]
+
+# Plus the standLRT of measurement effect
+slope <- coef(lmer.simple)$school[school, 2]*HW5$standLRT[i]
+
+# The prediction is the sum of these three components
+pred.simp <- rand.int + schavg.int + slope
+
+# Calculate the squared residual
+simp.sq.resid <- (HW5$normexam[i] - pred.simp)^2
+
+# Add the squared residual to the cv vector
+simple <- append(simple, simp.sq.resid)
+
+}
+
+comp.rMSE <- sqrt(sum(complex)/length(complex))
+simp.rMSE <- sqrt(sum(simple)/length(simple))
+
+
+
+For predictions at the individual school level the root-RMSE of the more complex model, with both varying intercepts and slopes, is 0.912, compared to the root-RMSE of the simple model without varying slopes of 0.833. The complex model seems to be a better predictor. 
+
+Next, we look at Level 2 Leave-one-out-cross-validation
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Level 2 Leave-one-out-cross-validation
+
+school.standLRT  <- tapply(HW5$standLRT, HW5$standLRT, mean)
+school.schavg    <- tapply(HW5$schavg, HW5$schavg, mean)
+school.normexam  <- tapply(HW5$normexam, HW5$normexam, mean)
+
+```
+
+Previous code results in miss-matching rows and the dataframe won't work
+
+school.data <- data.frame(standLRT = school.standLRT,
+                          schavg   = school.schavg,
+                         normexam  = school.normexam)
+
+simple2  <- c()
+complex2 <- c()
+
+for(i in 1:length(unique(HW5$school))){
+  
+  # train model dropping the ith school
+  school.drop <- HW5$school[i]
+  
+  # Include all schools except the dropped school
+  train.data <- HW5[!HW5$school == school.drop, ]
+
+  # Fit the complex model on the training data
+  lmer.complex <- lmer(normexam ~ standLRT + schavg +
+                      (1 + standLRT|school),
+                       data = train.data)
+
+  # Get the overall intercept
+  int <- fixef(lmer.complex)[1]
+
+  # Multiply floor fixed effect times the
+  slope <- fixef(lmer.complex)[2]*school.data$standLRT[i]
+
+  # Multiply by the county-level loguranium
+  schavg <- fixef(lmer.complex)[3]*school.data$schavg[i]
+  
+
+  pred.comp <- int + slope + schavg
+  
+  # Calculate the squared residual
+  comp.sq.resid <- (school.data$normexam[i] - pred.comp)^2
+  
+  # Add the squared residual to the cv vector
+  complex <- append(complex, comp.sq.resid)
+  
+}
+  

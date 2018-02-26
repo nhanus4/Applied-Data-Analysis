@@ -1,0 +1,578 @@
+---
+title: "HW 4_Hanus"
+output: html_document
+---
+
+####Conduct Probit Regression to Replicate Table I
+First, I will replicate Table I of Gerfin's (1996) paper titled, "Parametric and Semi-Parametric Estimation of the Binary Response Model of Market Labour Participation"
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Replicate the results of Gerfin (1996). Begin by reading section 3. The data can be obtained here:
+#library(AER)
+#data("SwissLabor")
+#Write a short report that replicates the top part of Table I for Switzerland (page 327). The probit regression can be executed using the following form:
+#glm(y ~ x, family = binomial(link = "probit"))
+#In the replication report, I expect you to:
+#1. Conduct the probit regression reported in the paper. (1 point)
+
+
+setwd("~/19-704/Homeworks/Homework 4")
+
+# Install required libraries and packages
+install.packages("ROCR", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("AER", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("arm", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("mgcv", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+
+
+library(AER)
+library(mgcv)
+library(MASS)
+library(plyr)
+library(arm)
+library(foreign)
+library(car)
+library(ROCR)
+
+# Read in data
+data(SwissLabor)
+
+# Make a copy of the data 
+HW4 <- SwissLabor
+
+# Shorten some of the column names and rename them
+names(HW4)[names(HW4)=="age"]       <- "AGE"
+names(HW4)[names(HW4)=="education"] <- "EDUC"
+names(HW4)[names(HW4)=="youngkids"] <- "NYC"
+names(HW4)[names(HW4)=="oldkids"]   <- "NOC"
+names(HW4)[names(HW4)=="income"]    <- "NLINC"
+names(HW4)[names(HW4)=="foreign"]   <- "FOREIGN"
+
+# Create new variables for probit regression
+HW4$AGESQ <- (HW4$AGE*10)^2/100
+
+# Next, convert FOREIGN to a dummy variable
+# If HW4$FOREIGN is equal to "yes", then foreign.mean = 1
+# Otherwise, foreign.mean = 0
+HW4$FOREIGN.dummy <- ifelse(HW4$FOREIGN 
+                            == "yes", 1, 0)
+
+# Also need to convert Participation into dummy variable
+# If HW4$participation is equal to "yes", then = 1
+# Otherwise, = 0
+HW4$participation.dummy <- ifelse(HW4$participation == "yes", 1, 0)
+
+# Perform the probit regression  
+SwissLabor.reg <- glm(participation ~ AGE + AGESQ + 
+                      EDUC + NYC + NOC + NLINC + FOREIGN,
+                      data = HW4,
+                      family = binomial(link = "probit"))
+
+# Find "Log Likelihood" for table
+SwissLabor.LogLik     <- round(logLik(SwissLabor.reg),2)
+
+# Extract coefficients and rename for printing table
+Table.I <- round(summary(SwissLabor.reg)$coefficients[c(1,2,3,4,5,6,7,8),c(1,2)],2)
+Table.I <- rbind(Table.I, SwissLabor.LogLik)
+
+# label the rows
+rownames(Table.I) <- c("Intercept", "AGE", "AGESQ",
+                       "EDUC", "NYC", "NOC",
+                       "NLINC", "FOREIGN", 
+                       "Log Likelihood")
+
+# Input authors' results for Table I for comparison
+Paper.I <- cbind(c(3.75, 2.08, -0.29, 0.02,
+                   -0.71, -0.15, -0.67, 0.71,
+                   509.4), 
+                  c(1.41, 0.41, 0.05, 0.02, 0.10,
+                    0.05, 0.13, 0.12))
+Table.I <- cbind(Paper.I[,1], Table.I[,1], Paper.I[,2], Table.I[,2])
+
+# table column names
+colnames(Table.I) <- c("Authors' Coef", "Replicated Coef", "Authors' Standard Error"
+                         , "Replicated Standard Error")
+
+# Print Table I
+print("Table I")
+Table.I
+
+```
+
+During the reproduction of Table I, it occurred to me that there was an error in the data description. AGESQ is actually AGE squared and divided by 100 rather than 1,000. 
+
+Furthermore, the Data description mentioned 873 observations for the Swiss data set when there was actually only 872 included in the data set. This might be a small typo and not suggestive of the authors omitting important data. 
+
+## Tell the 5 Stories
+### Histograms
+
+First we look at the histograms of age, education, number of young children, log of yearly non-labor income, number of older kids, and tables of whether the woman participates in the labor force and whether she is a permanent foreign resident, including a summary what we see.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Create histograms of age, education, number of young children, log of yearly non-labor income, number of older kids, and tables of wheter the woman participates in the labor force and whether she is a permanent foreign student.
+
+# Plot the histograms
+hist(HW4$AGE, 
+xlim = c(0, 8), # the x axis ranges from 0 to 200,000
+     ylim = c(0, 300), # the y axis ranges from 0 to 500
+     main = "Age", # The main title is "Price"
+     breaks = "FD", # Use the "bins" vector to determine the x axis bins
+     xlab = "")
+
+hist(HW4$EDUC, 
+     xlim = c(0, 25), ylim = c(0, 300), 
+     main = "Education", breaks = "FD",
+     xlab="")
+
+hist(HW4$NYC, 
+     main = "Number of Young Children",
+     xlab="")
+
+hist(HW4$NLINC, 
+     xlim = c(0, 15), ylim = c(0, 300), 
+     main = "Log of Yearly NonLabor Income",
+     breaks = "FD",
+     xlab="")
+
+hist(HW4$NOC, 
+     xlim = c(0, 7), ylim = c(0, 600), 
+     main = "No. of Old Children", 
+     breaks = "FD",
+     xlab="")
+
+# Create a tables of women participants and foreign status
+
+table(HW4$participation, dnn = "Participation")
+table(HW4$FOREIGN, dnn = "Foreign")
+
+```
+
+The age histogram tells us the women's age is rather uniformly distributed between approximately 20 and 60.As expected, the frequency drops off after 60 when people most likely retire. The Education historgram demonstrates a somewhat bimodal distribution, suggesting some women only finish high school while a subset continue on to college and grad school.
+
+It appears that the majority of women have zero young children. The Log of Yearly NonLabor Income histrogram depicts a normal distribution, suggesting the log transformation is correct.The histogram of the No. of Older Children seems positively skewed, suggesting women do not often have more than two older children. 
+
+From the table of Participation, we see that the rate is nearly 50%. Of the 872 observations, 401 women participate in the labor market and 471 do not.
+
+We see from the Foreign table that the majority of women are not permanent foreign residents (i.e. they are citizens of Switzerland). Only 216 of the 872 women are permanent foreign residents. 
+
+## Logit Regression and Bernoulli Likelihood Functions
+Please see attached Word document titled, "Problem 2" for discussion of logit regression and Bernoulli likelihood functions.
+
+## Complete the Logit Regression of Table I
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# 3. Conduct the logistic regression version of the model proposed in Table I. Interpret the logistic regression coefficients in terms of odds ratios. Note: Don't worry about interpreting the age coefficients. Plot the predicted probability of labor force participation against the woman's age, holding the other variables at their mean. (1 point)
+
+# Logit regression equivalent
+
+SwissLabor.reg1 <- glm(participation ~ AGE + AGESQ + 
+                      EDUC + NYC + NOC + NLINC + FOREIGN,
+                      data = HW4,
+                      family = binomial(link = "logit"))
+summary(SwissLabor.reg1)
+
+```
+
+Coefficient interpretation:
+As Education increases by 1 yr, the log odds ratio of Participation increases by 0.03. Alternatively, as Education increases by 1 yr, the odds ratio of Participation changes by e^(0.03*1yr).
+
+As Number of Youncg Children (NYC) increases by 1 child, the log odds ratio of Participation decreases by -1.19. Alternatively, as NYC increases by 1 child, the odds ratio of Participation changes by e^(1.19*child).
+
+As Number of Old Children (NOC) increases by 1 child, the log odds ratio of Participation decreases by -0.24. Alternatively, as NOC increases by 1 child, the odds ratio of Participation changes by e^(-.24*child).
+
+As log-labor income (NLINC) increases by log($1), the log odds ratio of Participation decreases by -1.1. Alternatively, as NLINC increases by log($1), the odds ratio of Participation changes by e^(-1.1*log($1)).
+
+If a woman is a permanent Foreign resident, the log odds ratio of Participation increases by 1.17. Alternatively, if a woman is FOREIGN, the odds ratio of Participation changes by e^(1.17*Foreign_yes).
+
+From the summary, we see that AGESQ, NYC, NOC, and NLINC have negative impacts on the odds ratio of Participation. This is intuitive, as one gets older (esp. after 60) they are less likely to work. Furthermore, as the number of young and old children increases for a mother, it is likely to interest/availability to work. Again, as the non-labor income increases (i.e. if she is wealthy by other means than working), she is less likely to need to work to support herself. Furthermore, it makes sense that the coefficient for NYC is larger than NOC, as women are more impacted by taking care of young children than older children who can go to a daycare.
+
+The odds ratio explains the magnitude that some effect (i.e. Education or Number of Young Children) has on Participation in the labor market.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Plot the predicted probability of labor force participation agaisnt the woman's age, holding all other variables at their mean
+
+# Find variable means
+EDUC.mean    <- mean(HW4$EDUC)
+NYC.mean     <- mean(HW4$NYC)
+NOC.mean     <- mean(HW4$NOC)
+NLINC.mean   <- mean(HW4$NLINC)
+FOREIGN.mean <- mean(HW4$FOREIGN.dummy)
+
+plot(jitter(HW4$AGE), jitter(HW4$participation.dummy, amount = 0.025),
+     xlab = "Age (years)",
+     ylab = "Predicted Probability of Participation",
+     ylim = c(-.2, 1.2),
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+
+# Plot curve by AGE at the mean of the other regressors
+curve(1/(1 + exp(-(coef(SwissLabor.reg1)[1] +
+                     coef(SwissLabor.reg1)[2]*x +
+                     coef(SwissLabor.reg1)[3]*x^2 +
+                     coef(SwissLabor.reg1)[4]*EDUC.mean +
+                     coef(SwissLabor.reg1)[5]*NYC.mean + 
+                     coef(SwissLabor.reg1)[5]*NLINC.mean +
+                     coef(SwissLabor.reg1)[5]*FOREIGN.mean))),
+      col = rgb(0, 0, 0, 1), add = TRUE, lwd = 2)
+
+              
+```
+
+From the plot of predicted probability of labor force participation against the womane's age, we see that the sweet spot for Participation is around 35 years of age. At this age, the likelihood of Participation is the highest. 
+
+## Calibration Table and Calibration Plot
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# 4. Create and examine a calibration plot and calibration table for the model proposed in Table 1. Does there seem to be model misspecification? Why or why not? (1 point)
+
+# First, save predictions in vector
+HW4$ParticipationProbs <- predict(SwissLabor.reg1,
+                               type = "response")
+
+# Get the deciles of the fitted probabilities
+decile.cutpoints <- quantile(HW4$ParticipationProbs, probs = seq(0, 1, .1))
+
+# Create a new variable that identifies
+# the quantile that each fitted probibility falls in
+HW4$decileID <- cut(HW4$ParticipationProbs,
+                    breaks = decile.cutpoints,
+                    labels = 1:10,
+                    include.lowest = TRUE)
+
+# Calculate the number that actually participated in each decile
+# You can see the counts by using table:
+tab <- table(HW4$decileID, HW4$participation)
+
+# To turn the table into a data.frame, use as.data.frame.matrix
+observed <- as.data.frame.matrix(tab)
+
+# To calculate the expected values for each decile,
+# we need to sum the fitted probabilities for each decile
+# We can do this by using tapply to compute
+# the sum of HW4$ParticipationProbs within each level of decileID:
+expected1 <- tapply(HW4$ParticipationProbs, HW4$decileID, FUN = sum)
+
+# Now make a table of comparisons
+
+# Create a summary calibration table
+# Create cutpoints that represent the 9 intervals that exist for deciles
+interval.cutpoints <- round(quantile(HW4$ParticipationProbs, probs = seq(.1, 1, .1)), 2)
+
+
+# Create a dataframe with these cutpoints:
+cal <- data.frame(interval.cutpoints)
+
+
+# Add a column of observed switches
+cal$observed1 <- observed[, 2]
+
+
+# Add a column of expected switches
+cal$expected1 <- round(expected1, 0)
+
+
+# Add columns for observed and expected non-participation:
+cal$observed0 <- observed[ , 1]
+cal$expected0 <-round(87.2 - expected1, 0)
+
+
+# Add a column for the total # of observations in each decile
+cal$total <- table(HW4$decileID)
+cal
+
+# The resulting table should be examined for dierences between the
+# model's predicted frequencies and the frequencies of the actual outcome (or
+# non-outcome), as well as examined for any systematic over or underprediction
+# as a function of decile. It is also important to check that the total number of
+# observations in each decile are equivalent, and if they are not, check how ties
+# are being resolved.
+```
+
+By examining the table, we see that the total number of observations in each decile is consistent in each decile and equals approximately of the total number of observations (872). When looking at Predicted Participation, we see that our model under-predicts for the first couple deciles and then over-predicts for a few deciles, then switches back and forth after the 50th percentile. As for the Predicted Non-Participation, we see the mirrored behavior. 
+
+Next we observe the Calibration Plot to see if our description is graphically consistent with our description of the Calibration Table. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Create the calibration plot
+
+observed1.prob  <- cal$observed1 / cal$total # Calculates predicted prob of participation
+expected1.prob  <- cal$expected1 / cal$total # Calculates observed prob of participation
+cal.plot <- data.frame(Observed = observed1.prob,
+                       Expected = expected1.prob)
+
+min.cal <- floor(min(cal.plot[,2], cal.plot[,4])) # cal.plot[,2] is Observed and [,4] is   expected
+max.cal <- ceiling(max(cal.plot[,2], cal.plot[,4]))
+
+plot(cal.plot[,4], # Plot the predicted probabilities
+     cal.plot[,2], # Plot the observed probabilities
+     xlim = c(min.cal, max.cal),
+     ylim = c(min.cal, max.cal),
+     xlab = "Predicted Probabilities",
+     ylab = "Empirical Relative Frequencies",
+     pch = 19,
+     col = rgb(0, 0, 0, .3))
+abline(0, 1)
+
+```
+
+As shown in the Calibration Table as well as the Calibration Plot, there does not seem to be a consistent theme to over or under-prediction of our model of Participation. It seems that at the 60th percentile (6th point to the right), our model largerly underpredicts. However, this seems to be the only decile with such a large deviation.
+
+##Compare Logistic Regression and a GAM
+
+Next, we compare the logistic regression and a generalized additive model with smoothing on age and education for the model proposed in Table I. We also look at the partial residual plots from the GAM. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# Compare logistic regression and a generalized additive model with smoothing on age and # education for the model proposed in Table I. Look at the partial residual plots from the GAM. # Do any transformations seem necessary to the age or education variables? Why or why not? (1 # point)
+
+
+
+
+gam1 <- gam(participation.dummy ~ s(AGE) +  
+              s(EDUC) + NYC + NOC + NLINC + FOREIGN.dummy,
+            data = HW4,
+            family = binomial(link = "logit"))
+
+plot(gam1, residuals = TRUE, shade = TRUE)
+
+
+```
+
+From the Age Residuals plot, we see that a transformation is likely needed. We note that a straight line could not be drawn through this plot, indicating it is not a linear fit. This suggests a transformation is necessary for this variable. Perhaps the Age should be squared as suggested by the authors.
+
+However, we see from the Education Residuals plot that a straight line could be drawn through the plot. This indicates that a transformation is not necessary for this variable. 
+
+## Stukel Test for Logistic Regression and GAM
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+
+# Use Stukel's test for the logistic regression and previously suggested generalized additive model. Does the logit link function seem appropriate? Why or why not?
+
+# First, we perform the Stuckel test for the logistic model
+eta.hat1 <- predict(SwissLabor.reg1)
+
+# Then create an indicator eta >= 0
+positive1 <- ifelse(eta.hat1 >= 0, 1, 0)
+negative1 <- ifelse(eta.hat1 < 0, 1, 0)
+
+# Square eta
+eta.hat.sq1 <- eta.hat1^2
+
+# Then we run the model:
+stukel1 <- glm(participation.dummy ~ AGE + AGESQ + 
+                 EDUC + NYC + NOC + NLINC + FOREIGN.dummy 
+                 + eta.hat.sq1:positive1 + eta.hat.sq1:negative1,
+               data = HW4,
+               family = binomial(link = "logit"))
+plot(stukel1,
+     shade = TRUE,
+     residuals = TRUE,
+     scale = 0,
+     cex = 1,
+     pch = 19,
+     col = rgb(0, 0, 0, .4))  
+  
+
+# Next, we perform the Stuckel test for the GAM model
+eta.hat2 <- predict(gam1)
+
+# Then create an indicator eta >= 0
+positive2 <- ifelse(eta.hat2 >= 0, 1, 0)
+negative2 <- ifelse(eta.hat2 < 0, 1, 0)
+
+# Square eta
+eta.hat.sq2 <- eta.hat2^2
+
+# Then we run the model:
+stukel2 <- gam(participation.dummy ~ s(AGE) + 
+                 s(EDUC) + NYC + NOC + NLINC + FOREIGN.dummy 
+                 + eta.hat.sq2:positive2 + eta.hat.sq2:negative2,
+               data = HW4,
+               family = binomial(link = "logit"))
+
+plot(stukel2,
+     shade = TRUE,
+     residuals = TRUE,
+     scale = 0,
+     cex = 1,
+     pch = 19,
+     col = rgb(0, 0, 0, .4))
+
+# Output summaries of Stukel tests for discussion section
+summary(stukel1)
+summary(stukel2)
+
+```
+
+When performing the Stukel tests, we are most concerned with the alphas. The following formulas depict how each alpha is derived from the Summary output of the Stukel, which includes the Betas:
+
+Alpha 1 = 2*Beta 1
+Alpha 2 = -2*Beta 2
+
+For our Stukel test on the logistic regression, we have Beta 1 = "eta.hat.sq1:positive1" and Beta 2 = "eta.hat.sq1:negative1"
+
+For our Logistic regression from Table I (GLM), we have:
+Alpha 1 = 0.7
+Alpha 2 = 0.18
+
+For our Stukel test on the GAM, we have Beta 1 = "eta.hat.sq2:positive2" and Beta 2 = "eta.hat.sq2:negative2"
+
+For our GAM regression, we have:
+Alpha 1 = 1.14
+Alpha 2 = 0.47
+
+A better fitting model is one with Alpha 1 and Alpha 2 close to zero. Therefore, the Stukel tests tell us that the logit link function does seem appropriate. 
+
+## Cross-Validated ROC Curve 
+Next, we create a cross-validated Receiver Operating Characteristic (ROC) curve for the logistic regression for a Simple and Complex model. 
+
+The ROC curve plots the true positive rate against the false positive rate for different cutoff probabilities.
+
+The simple model does not include an AGESQ variable (i.e. no transformations on Age). The complex model includes the AGESQ variable (i.e. transform AGE to a squared variable)
+
+glm.Simple <- glm(participation ~ AGE + 
+                      EDUC + NYC + NOC + NLINC + FOREIGN,
+                      data = training,
+                      family = binomial(link = "logit"))
+
+
+glm.Complex <- glm(participation ~ AGE + AGESQ + 
+                      EDUC + NYC + NOC + NLINC + FOREIGN,
+                      data = training,
+                      family = binomial(link = "logit"))
+                      
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+# 7. Create a cross-validated ROC curve for the logistic regression with and without any transformations or interactions you think are necessary based on your previous work. Which model performs better in terms of cross-validation and which model do you prefer? Explain your reasoning. (1 point)
+
+# Run ROC for both models
+# Simple model = does not include Age Squared
+# Complex model = includes the Age Squared variable
+
+
+# Create an empty data frame to store the predictions
+predictions.Simple  <- data.frame(rep(NA, round(nrow(HW4)/3)))
+predictions.Complex <- data.frame(rep(NA, round(nrow(HW4)/3)))
+
+# Remove the column of NAs
+predictions.Simple  <- predictions.Simple[, -1]
+predictions.Complex <- predictions.Complex[, -1]
+
+# Create an empty data frame to store the actual outcomes
+labels.Simple  <- data.frame(rep(NA, round(nrow(HW4)/3)))
+labels.Complex <- data.frame(rep(NA, round(nrow(HW4)/3)))
+
+# Remove the column of NAs
+labels.Simple  <- labels.Simple[, -1]
+labels.Complex <- labels.Complex[, -1]
+
+for(i in 1:1000){
+# Take a random sample, without replacement from 2/3 of the rows
+samp1 <- sample(rownames(HW4), round(2*nrow(HW4)/3), replace = FALSE)
+
+# Training data takes the sampled rows
+training <- HW4[samp1, ]
+
+# Test data takes the remaining rows
+testing <- HW4[setdiff(rownames(HW4), samp1), ]
+
+# Run glm on training data
+# Run Simple and COmplex glm
+glm.Simple <- glm(participation ~ AGE + 
+                      EDUC + NYC + NOC + NLINC + FOREIGN,
+                      data = training,
+                      family = binomial(link = "logit"))
+
+
+glm.Complex <- glm(participation ~ AGE + AGESQ + 
+                      EDUC + NYC + NOC + NLINC + FOREIGN,
+                      data = training,
+                      family = binomial(link = "logit"))
+
+# Make probability predictions for test data
+glmpred.Simple  <- predict(glm.Simple, testing, type = "response")
+glmpred.Complex <- predict(glm.Complex, testing, type = "response")
+
+# Add the predictions for this iteration to the data frame
+predictions.Simple  <- cbind(predictions.Simple, glmpred.Simple)
+predictions.Complex <- cbind(predictions.Complex, glmpred.Complex)
+
+# Add the actual outcomes for this iteration to the data frame
+labels.Simple <- cbind(labels.Simple, testing$participation.dummy)
+labels.Complex <- cbind(labels.Complex, testing$participation.dummy)
+
+}
+
+# Create a list with the predictions and labels
+cvdata.Simple  <- list(predictions.Simple, labels.Simple)
+cvdata.Complex <- list(predictions.Complex, labels.Complex)
+
+# Run the ROCR prediction and performance measures
+glmerr.Simple  <- prediction(cvdata.Simple[[1]], cvdata.Simple[[2]])
+glmerr.Complex <- prediction(cvdata.Complex[[1]], cvdata.Complex[[2]])
+
+
+glmperf.Simple  <- performance(glmerr.Simple, measure="tpr", x.measure="fpr")
+glmperf.Complex <- performance(glmerr.Complex, measure="tpr", x.measure="fpr")
+
+# This gives a vector of AUCs
+glmauc.Simple  <- performance(glmerr.Simple, measure = "auc")
+glmauc.Complex <- performance(glmerr.Complex, measure = "auc")
+
+# Unlist the AUCs
+glmauc.Simple  <- unlist(glmauc.Simple@y.values)
+glmauc.Complex <- unlist(glmauc.Complex@y.values)
+
+# Take the average
+glmauc.Simple <- mean(glmauc.Simple); glmauc.Simple
+glmauc.Complex <- mean(glmauc.Complex); glmauc.Complex 
+
+# Plot the Simple model
+plot(glmperf.Simple,
+     colorize = TRUE,
+     color = rainbow(10),
+     main = "Cross-Validated ROC Curve of Simple Model",
+     avg = 'threshold',
+     spread.estimate = 'stddev',
+     print.cutoffs.at = seq(.0, .9, by = 0.1),
+     text.adj = c(-.5, 1.2),
+     xlab = "Average False Positive Rate",
+     ylab = "Average True Positive Rate")
+abline(0, 1)
+
+# Plot the Complex model
+plot(glmperf.Complex,
+     colorize = TRUE,
+     color = rainbow(10),
+     main = "Cross-Validated ROC Curve of Simple Model",
+     avg = 'threshold',
+     spread.estimate = 'stddev',
+     print.cutoffs.at = seq(.0, .9, by = 0.1),
+     text.adj = c(-.5, 1.2),
+     xlab = "Average False Positive Rate",
+     ylab = "Average True Positive Rate")
+abline(0, 1)
+
+```
+
+
+An intuitive way of summarizing the ROC is with the Area Under the Curve (AUC), which is the area under the ROC curve compared to the random guessing y=x line. 
+
+We see that the Simple model has a mean AUC (glmauc.Simple) of 72%, while the Complex model has a mean AUC (glmauc.Complex) of 75%. Therefore, the complex model with the Age squared transformation provides more accurate predictions (i.e. the area under the curve of the ROC and the random guess line is larger).
+
+We should also note that the error bars in both ROC plots are rather tight and do not overlap. This is indicitive of a large sample set and strengthens our claim that the Complex model is indeed better than the Simple model. 
+
+## Statistical Inference and Causality Stories
+To make a statistical inference, we must be confident the sample is random and representative of the population we are interested in studying. The Swiss data consists of only married women who responded to the health survey for Switzerland for 1981. Therefore, if we are only concerned with making statistical inferences of this specific sub-population, this is a valid data set. Otherwise, it includes self-selection and is not representative of the rest of Switzerland. Furthermore, it is outdated if trying to making statistical inferences today. 
+
+To make causal claims, we want randomized, control trials. This data does not represent randomized control trials and, therefore, we do not have much of a causal story.

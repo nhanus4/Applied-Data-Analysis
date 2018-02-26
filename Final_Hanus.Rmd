@@ -1,0 +1,845 @@
+---
+title: "Project_Hanus"
+output: html_document
+---
+
+#Final Exam
+
+## Part 1: Replicate Baltagi's Results in Table 1 
+First, I will replicate Baltagi's results in Table 1 for the OLS model (complete pooling, row 1), OLS with time dummies (row 2), and the Within transformation (row 4). I will summarize the similarities and/or differences between the reported results and my replication.
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+
+setwd("~/19-704/Homeworks/Homework 6")
+
+
+# Install required libraries and packages
+install.packages("lmtest", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("Ecdat", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("plm")
+install.packages("arm", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("sandwich", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+install.packages("mgcv", repos = "http://lib.stat.cmu.edu/R/CRAN/")
+
+
+library(Ecdat)
+library(mgcv)
+library(plm)
+library(car)
+library(arm)
+library(sandwich)
+library(lmtest)
+library(mgcv)
+
+# Read in data
+data("Cigar", package = "Ecdat")
+
+# state: state abbreviation
+# year: the year
+# price: price per pack of cigarettes
+# pop: population
+# pop16: population above the age of 16
+# cpi: consumer price index (1983=100)
+# ndi: per capita disposable income
+# sales: cigarette sales in packs per capita
+# pimin: minimum price in adjoining states per pack of cigarettes
+
+
+# Make a copy of the data 
+Final <- Cigar
+
+# Create CPI Factor
+Final$cpi.factor <- Final$cpi/Final$cpi[81]
+
+# Transform the price and sales values to include inflation
+# c stands for correction
+Final$price.c <- Final$price/Final$cpi.factor
+Final$pimin.c <- Final$pimin/Final$cpi.factor
+Final$ndi.c   <- Final$ndi/Final$cpi.factor
+
+
+# First, log transform the pertinant variables
+Final$ln.sales   <- log(Final$sales)
+Final$ln.price   <- log(Final$price.c)
+Final$ln.pimin   <- log(Final$pimin.c)
+Final$ln.ndi     <- log(Final$ndi.c)
+
+# Create a panel dataframe
+data <- data.frame(year     = Final$year,
+                   state    = Final$state,
+                   sales    = Final$sales,
+                   price.c  = Final$price.c,
+                   pimin.c  = Final$pimin.c,
+                   ndi.c    = Final$ndi.c,
+                   ln.sales = Final$ln.sales,
+                   ln.price = Final$ln.price,
+                   ln.pimin = Final$ln.pimin,
+                   ln.ndi   = Final$ln.ndi)
+
+# Create this panel dataframe to find lag effect of price
+Yeardata.p <- pdata.frame(data, "state")
+
+# Create the lagged variable for sales
+Yeardata.p$lagsales <- lag(Yeardata.p$sales, k = 1)
+
+# find the ln of the lagged variable for sales
+Yeardata.p$ln.lagsales <- log(Yeardata.p$lagsales)
+
+# Replicate the OLS model (complete pooling, row 1)
+OLS <- lm(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi,
+           data = Yeardata.p)
+
+
+# Replicate the OLS Model with time dummies (row 2)
+OLS.D <- lm(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi + factor(year),
+           data = Yeardata.p)
+
+
+# Replicate the Within transform (Row 4) - look at within years
+# need to convert panel data frame to be grouped by years
+
+within.plm <- plm(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi +
+                  factor(year),
+                  data = Yeardata.p,
+                  model = "within")
+
+
+
+# Extract coefficients and rename for printing table
+Table.I <- round(summary(OLS)$coefficients[c(2,3,4,5),c(1)],2)
+Table.I <- cbind(Table.I, round(summary(OLS.D)$coefficients[c(2,3,4,5),c(1)],2))
+Table.I <- cbind(Table.I, round(summary(within.plm)$coefficients[c(1,2,3,4),c(1)],2))
+
+# label the rows
+rownames(Table.I) <- c("ln.lagsales", "ln.price",
+                       "ln.pimin", "ln.ndi")
+colnames(Table.I) <- c("OLS", "OLS W. Dummies", "Within")
+Table.I
+
+```
+
+### Part 1, Problem 1:
+From the replicated models, it seems our intercepts are fairly consistent with the paper. The OLS with Time dummy might have the most discrepenceies (though, small); our ln.lagscale is 0.01 higher and their ln.price is .02 lower (-0.14). In general, our ln.price is always slightly off than what is presnted in the paper.
+
+### Part 1, Problem 2:
+Since I was able to reproduce the coefficients rather accurately, it suggests his write-up allows for reproducibility. Baltagi et al. did not comment on how they handled the CPI, which could lead to slightly different values in the coefficients that relate to dollar values (ln.price, ln.pimin, and ln.ndi). In that sense, the authors did not quite "bend over backwards" to provide a write-up that allowed for complete reproduceability, as suggested by Feynman's Rule.
+
+To make your results reproducible, you must be explicit about data collection, pre-processing, analysis, and reporting. Furthermore, this documenation should start from the beginning to ensure everything is included and that you can reproduce your own work.
+
+### Part 1, Problem 3:
+The OLS model is a log-log model; both the dependent variable and independent variables are log transformed. Therefore, the coefficients essentially represent elasticities. For instance, the coefficient of the ln.price suggests that a 1% change in price is associated with a -0.08 change in sales. A 1% change in lagsales is associated with a 0.97% change in price. A 1% change in pimin is associated with a 0.02% change in sales. A 1% change in ndi is associated with a -0.03% change in sales. 
+
+## Part 2
+
+### Part 2, Problem 1:
+The five stories are as follows:
+1. The Data Summary
+2. The Conditional Distribution Story
+3. The Forecasting Story
+4. The Statistical Inference Story
+5. The Causal Inference Story
+
+I think the most important stories to tell are the Data Summary and Conditional Distribution Story. If you don't understand the characteristics of your data and how to specify your model, the Forecasting, Statistical Inference, and Causal Inference stories become meaningless (or impossible). However, these may be the most neglected stories. They are certainly not discussed in papers because they do not necessarily answer research questions or hypothesis that are published. In fact, they are like a due diligence for researchers. It is unclear to what level of scrutiny these stories are told/explored as they are often omitted from the paper. I think the Statistical Inference and Causal Inference story often get confused with each other. It is likely that researchers forget that they need randomized, control trials to arrive at a causal inference story. People often get caught up in their p-values and become overly confident with their conclusions. We are expected to tell all stories, because we are Alex's students. (However, it's unclear if the Data Summary and Conditional Distribution stories are as compelling as the other stories for journals.)
+
+### Part 2, Problem 2: Determine if Log Transform is approrpriate for the dependent variable
+I perform the Box-Cox on the dependent variable (sales), using the full OLS model. I also perform the Box-Cox on the dependent variable (sales) without the model (regressed on 1).
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Question 2: Natural Log Transform on the dependent variable, sales
+# Sales and whole model
+print("DV = Sales")
+sales.boxcox1 <- boxCox(sales ~ ln.lagsales + price.c + pimin.c + ndi.c,
+                          data = Yeardata.p,
+                          family = "yjPower") # Use the Yeo-Johnson power 
+sales.boxcox1$x[sales.boxcox1$y == max(sales.boxcox1$y)]
+
+# Sales and 1
+sales.boxcox2 <- boxCox(sales ~ 1,
+                          data = Yeardata.p,
+                          family = "yjPower") # Use the Yeo-Johnson power 
+sales.boxcox2$x[sales.boxcox2$y == max(sales.boxcox2$y)]
+
+```
+
+We see that the lambda from the Box Cox with the whole model is 0.02, which suggests that the natural log transform is a decent transformation for this variable. We also see that the lambda from the Box Cox for the dependent variable regressed on 1 is -0.424, still suggesting that a log transform is decent.
+
+### Part 2, Problem 3: Log Transform on the independent variables
+First, we explore this problem using histograms on the independent variables. Next, we perform the gam function on each of the variables for each of the models to specify appropriate lambdas. We confirm these findings with the Box-Cox of each of the independent variables and we also observe the conditional distributions of the independent variables. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Question 3: Natural Log Transform on the independent variables
+# Look at the histograms of our non-lagged independent variables
+# Observe both non-transformed and log-transformed
+hist(Yeardata.p$price.c,
+     xlab = "Non-Transfomred Price",
+     breaks = "FD",
+     main = "")
+hist(Yeardata.p$ln.price,
+     xlab = "Log-Transfomred Price",
+     breaks = "FD",
+     main = "")
+
+hist(Yeardata.p$pimin.c,
+     xlab = "Non-Transfomred Pimin",
+     breaks = "FD",
+     main = "")
+hist(Yeardata.p$ln.pimin,
+     xlab = "Log-Transfomred Pimin",
+     breaks = "FD",
+     main = "")
+
+hist(Yeardata.p$ndi.c,
+     xlab = "Non-Transfomred ndi",
+     breaks = "FD",
+     main = "")
+hist(Yeardata.p$ln.ndi,
+     xlab = "Log-Transfomred ndi",
+     breaks = "FD",
+     main = "")
+
+```
+
+From the histograms of the non-lagged independent variables, we see that the log transformation does make each of them portray a more normal distribution.
+
+Next, we look at the Gam functions for each indepenent variable.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Look at the gam function for the orginal OLS (row 1)
+gam1 <- gam(ln.sales ~ s(lagsales) + s(price.c) + s(pimin.c) + s(ndi.c), 
+            data = Yeardata.p)
+
+plot(fitted(gam1), resid(gam1),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "OLS",
+     pch = 19,
+     col = rgb(0, 0, 0, .5))
+lines(lowess(fitted(gam1), resid(gam1)), col = "green", lwd = 2)
+
+# Lag Sales, OLS
+plot(gam1, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 1,
+     scale     = 0,
+     main      = "Lag Sales, OLS")
+
+# Price, OLS
+plot(gam1, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 2,
+     scale     = 0,
+     main      = "Price, OLS")
+
+# pimin, OLS
+plot(gam1, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 3,
+     scale     = 0,
+     main      = "Pimin OLS")
+
+# ndi, OLS
+plot(gam1, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 4,
+     scale     = 0,
+     main      = "ndi, OLS")
+
+qqnorm(resid(gam1),
+       pch = 19,
+       ylab = "Raw Residuals",
+       main = "OLS")
+qqline(resid(gam1))
+
+
+# Look at the gam function for the OLS with time dummy (row 2)
+gam2 <- gam(ln.sales ~ s(lagsales) + s(price.c) + s(pimin.c) + s(ndi.c)
+            + factor(year), 
+            data = Yeardata.p)
+
+plot(fitted(gam2), resid(gam2),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "OLS with Time Dummy",
+     pch = 19,
+     col = rgb(0, 0, 0, .5))
+lines(lowess(fitted(gam2), resid(gam2)), col = "green", lwd = 2)
+
+# Lag Sales, OLS + Time dummy
+plot(gam2, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 1,
+     scale     = 0,
+     main      = "Lag Sales, OLS + Time Dummy")
+
+# Price, OLS + Time Dummy
+plot(gam2, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 2,
+     scale     = 0,
+     main      = "Price, OLS + Time Dummy")
+
+# pimin, OLS + Time Dummy
+plot(gam2, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 3,
+     scale     = 0,
+     main      = "Pimin, OLS + Time Dummy")
+
+# ndi, OLS + Time Dummy
+plot(gam2, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 4,
+     scale     = 0,
+     main      = "ndi, OLS + Time Dummy")
+
+qqnorm(resid(gam2),
+       pch = 19,
+       ylab = "Raw Residuals",
+       main = "OLS + Time Dummy")
+qqline(resid(gam2))
+
+
+# Look at the gam function for the OLS with time and state dummy (row 4)
+gam3 <- gam(ln.sales ~ s(lagsales) + s(price.c) + s(pimin.c) + s(ndi.c)
+            + factor(year) + factor(state), 
+            data = Yeardata.p)
+
+plot(fitted(gam3), resid(gam3),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "OLS with Time and State Dummies",
+     pch = 19,
+     col = rgb(0, 0, 0, .5))
+lines(lowess(fitted(gam3), resid(gam3)), col = "green", lwd = 2)
+
+# Lag Sales, OLS + Time dummy + State
+plot(gam3, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 1,
+     scale     = 0,
+     main      = "Lag Sales, OLS + Time Dummy + State")
+
+# Price, OLS + Time Dummy + State
+plot(gam3, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 2,
+     scale     = 0,
+     main      = "Price, OLS + Time Dummy + State")
+
+# pimin, OLS + Time Dummy + State
+plot(gam3, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 3,
+     scale     = 0,
+     main      = "Pimin, OLS + Time Dummy + State")
+
+# ndi, OLS + Time Dummy + State
+plot(gam3, 
+     residuals = TRUE, 
+     shade     = TRUE,
+     select    = 4,
+     scale     = 0,
+     main      = "ndi, OLS + Time Dummy + State")
+
+qqnorm(resid(gam3),
+       pch = 19,
+       ylab = "Raw Residuals",
+       main = "OLS + Time Dummy + State")
+qqline(resid(gam3))
+
+
+```
+
+From the gam plots, we see some heterskedasticity in the higher values of sales which could be suggestive of slight heterogeneity across states. The price to sales and neighboring state to sales relationships seem relatively linear.
+The lag sales and ndi definitely seem like they need a log transform or square root transform.
+
+Next, we confirm these with lambda values from the invididual Box Cox. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+# IV1: lagsales
+print("IV = Lage Sales")
+lagsales.boxcox <- boxCox(lagsales ~ 1,
+                          data = Yeardata.p, 
+                          family = "yjPower") # Use the Yeo-Johnson power 
+lagsales.boxcox$x[lagsales.boxcox$y == max(lagsales.boxcox$y)]
+
+# IV2: Price.c (cig price)
+print("IV = Price")
+pricec.boxcox <- boxCox(price.c ~ 1,
+                          data = Yeardata.p, 
+                          family = "yjPower") # Use the Yeo-Johnson power 
+pricec.boxcox$x[pricec.boxcox$y == max(pricec.boxcox$y)]
+
+# IV3: Pimin.c (neighboring price)
+print("IV = Pimin")
+piminc.boxcox <- boxCox(pimin.c ~ 1,
+                          data = Yeardata.p,, 
+                          family = "yjPower") # Use the Yeo-Johnson power 
+piminc.boxcox$x[piminc.boxcox$y == max(piminc.boxcox$y)]
+
+# IV4: ndi.c (nondisposable income)
+print("IV = ndic")
+ndic.boxcox <- boxCox(ndi.c ~ 1,
+                          data = Yeardata.p, 
+                          family = "yjPower") # Use the Yeo-Johnson power 
+ndic.boxcox$x[ndic.boxcox$y == max(ndic.boxcox$y)]
+
+# Look at Box Cox of all log transformed variables on non-transformed sales
+print("Box Cox of all logged IVs onto DV")
+sales2.boxcox <- boxCox(sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi,
+                          data = Yeardata.p, 
+                          family = "yjPower") # Use the Yeo-Johnson power 
+sales2.boxcox$x[sales2.boxcox$y == max(sales2.boxcox$y)]
+
+
+
+```
+From the box-cox of each of the independent variables, we see lambda values close to zero suggesting that a log transformation is a decent transformation. Surprisingly, the lagsales (lambda = -0.46) and ndic (lambda = 0.38) have lambda values deviating from zero greater than the lambda values for the price and pmin. Still, no lambda values exceed +0.5 or -0.5.
+
+Next, let's look at the marginal relationships between each of the regressors and the sales.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Look at marginal plots; price
+plot(Yeardata.p$ln.price,
+     Yeardata.p$ln.sales,
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     xlab = "Log Price",
+     ylab = "Log Sales")
+abline(lm(ln.sales ~ ln.price, data = Yeardata.p))
+
+# Look at marginal plots; pimin
+plot(Yeardata.p$ln.pimin,
+     Yeardata.p$ln.sales,
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     xlab = "Log Pimin",
+     ylab = "Log Sales")
+abline(lm(ln.sales ~ ln.pimin, data = Yeardata.p))
+
+# Look at marginal plots; ndi
+plot(Yeardata.p$ln.ndi,
+     Yeardata.p$ln.sales,
+     pch = 19,
+     col = rgb(0, 0, 0, .5),
+     xlab = "Log Ndi",
+     ylab = "Log Sales")
+abline(lm(ln.sales ~ ln.ndi, data = Yeardata.p))
+
+
+OLS.boxtidwell <- boxTidwell(ln.sales ~ lagsales + price.c + pimin.c
+                             + ndi.c, data = Yeardata.p)
+
+
+```
+
+The conditional distributions of each of these independent variables seems consistent (all relatively clustering around the marginal regression lines). 
+
+It seems the log transformation may not be the best transformation for each of the variables (esp. price and pimin), but it makes sense from an econometric standpoint (observing price elasticity of demand), so I keep the transformations suggested in the paper. I keep the log transformations on the dependent and independent variables moving forward in the following exercises.
+
+### Part 2, Problem 4: Analysis of Residuals
+Next, we look at the residuals of the three replicated models (OLS, OLS with Time Dummy, and Within model).
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Plot the fitted OLS (complete pooling, Row 1) vs. residuals 
+plot(fitted(OLS), resid(OLS),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Fitted OLS vs. Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .5))
+lines(lowess(fitted(OLS), resid(OLS)), col = "green", lwd = 2)
+# Plot the q-q plot of the OLS (complete pooling, Row 1) residuals 
+qqPlot(OLS,
+       pch = 19,
+       col = rgb(0, 0, 0, .3),
+       ylab = "Jackknife Residuals",
+       main = "OLS - Row 1")
+
+
+# Plot the fitted OLS with time dummies (Row 2) vs. residuals
+plot(fitted(OLS.D), resid(OLS.D),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Fitted OLS with time dummies vs. Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .5))
+lines(lowess(fitted(OLS.D), resid(OLS.D)), col = "green", lwd = 2)
+# Plot the q-q plot of the OLS with time dummies (Row 2) residuals
+qqPlot(OLS.D,
+       pch = 19,
+       col = rgb(0, 0, 0, .3),
+       ylab = "Jackknife Residuals",
+       main = "OLS w. Dummies - Row 2")
+
+
+# Analyze the residuals of the Within transformation (Row 4)
+# Convert this model into a least-squares dummy variable (LSDV) regression
+lsdv.within <- lm(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi + factor(year) + factor(state), data =
+                    Yeardata.p)
+coef(lsdv.within)["ln.lagsales"]
+coef(lsdv.within)["ln.price"]
+coef(lsdv.within)["ln.pimin"]
+coef(lsdv.within)["ln.ndi"]
+
+# Plot the fitted Within model (Row 4) vs. residuals
+plot(fitted(lsdv.within), resid(lsdv.within),
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Fitted Within vs. Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, .5))
+lines(lowess(fitted(lsdv.within), resid(lsdv.within)), col = "green", lwd = 2)
+# Plot the q-q plot of the Within model (Row 4) vs. residuals 
+qqPlot(lsdv.within,
+       pch = 19,
+       col = rgb(0, 0, 0, .3),
+       ylab = "Jackknife Residuals",
+       main = "Within - Row 4")
+
+
+```
+For each of our models, the fitted vs. residuals plot depicts some separation in lower and higher log.sales values. This effect is demonstrated most in the "Fitted Within vs. Residuals" plot. 
+
+In addition, we see symmetric heavy-tailed distributions of the studentized residuals in the q-q plots for each of the models (OLS, OLS with Dummies, and Within model). 
+
+Potential problems with residuals could be outliers in our data that have high discrepancy and high leverage (i.e. the data point is influential). A larger discrepancy means a worse prediction, and larger residual. We could find the Cook's D (measure of an observation's influence) to help us determine how much our predictions change when this observation is removed. Cleaning our data of certain justified points should improve the residuals.  We could also use the studentized residuals, which account for the fact that observations with higher leverage should also be expected to have lower residuals, as they tend to bring the regression line toward them.
+
+We could also observe heteroskedasticity in our residuals. In the case of heteroskedasticity, the error variances change as function of the regressors. This could occur due to omitted variable bias or poor model specification. One could always look at the robust standard errors if they only wanted to make a statistical or causal inference and weren't concerned with the origin of heteroskedasticity. 
+
+### Part 2, Problem 5: Partial Pooling version of Within Model
+In this section, we conduct a partial pooling version of the Within model(i.e. partially pooled intercepts by state and time). We summarize the variance components of the partial pooling model.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# First, create a partial pooling version of the Within model
+# (i.e. partially pooled intercepts by state and time)
+# (1|state) and (1|year) indicates that we should estimate partially pooled
+# state and year-level intercepts
+
+within.pp <- lmer(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi + (1|state) + (1|year),
+                  data = Yeardata.p)
+summary(within.pp)
+
+# Look at the largest state-level deviations from the overall average by examining the deviations
+within.ppvariance <- as.matrix(ranef(within.pp)$state)
+
+state.intercept <- fixef(within.pp)[1]+ranef(within.pp)$state
+year.inercept   <- fixef(within.pp)[1]+ranef(within.pp)$year
+
+var.state <- var(state.intercept)
+var.year <- var(year.inercept)
+
+# Look at no pooling (LSDV)
+intercepts.lsdv <- coef(summary(lsdv.within))[-c(1,2,3,4,5), ]
+
+year.lsdv <- intercepts.lsdv[1:28, 1]
+state.lsdv <- intercepts.lsdv[29:73, 1]
+
+var.yearlsdv <- var(year.lsdv)
+var.statelsdv <- var(state.lsdv)
+
+# Create table of variances
+Table.II <- round(var.state,6)
+Table.II <- rbind(Table.II, round(var.year,6))
+lsdv <- c(round(var.statelsdv, 6), round(var.yearlsdv, 6)) 
+Table.II <- cbind(Table.II, lsdv)
+
+# Row and column names for table
+rownames(Table.II) <- c("State", "Year")
+colnames(Table.II) <- c("PP", "NP")
+Table.II
+
+
+```
+
+Table II portrays the intercept variances for State and Year for the partial pooling model (PP) and no pooling model (NP). We see that the partial pooling has lower variances for each of the intercepts, suggesting it is a better model. It is intuitive to also perform a partial pooling for this data set as it can easily be identified as multi-level data (states and years).
+
+### Part 2, Problem 6: Strict Exogeneity
+
+Strict exogeneity indicates that the expected value of the errors in any time period are independent of the regressors for all time periods during, before and after t (the period of analysis). Meaning, regressors do not feed-forward to affect the errors in future time periods, and errors do not feed-forward to affect regressors in future time periods.
+
+Strict exogeneity can be broken down into three parts:
+Contemporaneous exogeneity
+Backward exogeneity
+Forward exogeneity
+
+Discussion of Contemporaneous Exogeneity:
+From our previous conditional distribution stories, we see that contemporaneous exogeneity holds for this data. The log transform model seem like a good fit as dicussed in the previous discussion regarding variable transformations and residual analysis. 
+
+Discussion of Forward Exogeneity:
+The proposed models all include the lagged dependent variable in the regression. This suggests that the errors from the previous year are included in the current year model, accounting for forward exogeneity.
+
+Discussion of Backward Exogeneity:
+Finally, we explore backward exogeneity by lagging the remaining independent variables (price, pimin, and ndi) to determine if this lag has any effect on our models. We again utilize the gam function to observe this. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Backwards exogeneity
+# Create lagged regressors Price, pimin, ndi
+Yeardata.p$lag.lnprice <- lag(Yeardata.p$ln.price, k = 1)
+Yeardata.p$lag.lnpimin <- lag(Yeardata.p$ln.pimin, k = 1)
+Yeardata.p$lag.lnndi   <- lag(Yeardata.p$ln.ndi, k = 1)
+
+# Run regressions with the three new lagged variables
+# First, look at lagged ln price
+OLS.lag1gam <- gam(ln.sales ~ ln.price + ln.pimin + ln.ndi + s(lag.lnprice) + factor(state) + factor(year),
+                   data = Yeardata.p)
+plot(OLS.lag1gam,
+     residuals = TRUE,
+     shade = TRUE,
+     select = 1)
+
+# next, look at lagged ln pimin
+OLS.lag2gam <- gam(ln.sales ~ ln.price + ln.pimin + ln.ndi + s(lag.lnpimin) + factor(state) + factor(year),
+                   data = Yeardata.p)
+plot(OLS.lag2gam,
+     residuals = TRUE,
+     shade = TRUE,
+     select = 1)
+
+# next, look at lagged ln ndi
+OLS.lag3gam <- gam(ln.sales ~ ln.price + ln.pimin + ln.ndi + s(lag.lnndi) + factor(state) + factor(year),
+                   data = Yeardata.p)
+
+plot(OLS.lag3gam,
+     residuals = TRUE,
+     shade = TRUE,
+     select = 1)
+
+```
+
+These plots show weak relationships between log sales in year t and the price, pimin, and ndi from the previous years as shown in the gam plots depicting suggested transformations of the lagged variables. This suggests that backward exogeneity holds.
+
+### Part 2, Problem 7: Policies and Difference-in-Difference
+In section II, Balgati refers to four major policy interventions that can change a year-specific effect:
+1. The imposition of warning labels by the Federal Trade Comission effective january 1965,
+2. the application of the Fairness Doctrine Act to cigarette advertising in June 1967, which subsidized antismoking messages from 1968 to 1970, 
+3. the Congressional ban of broadcast advertising of cigarettes effective January 1971, and
+4. "clean air laws" restricting smoking in the work place, public places, and commercial flights within the U.S..
+
+To handle these issues, he assumes that the time-period effets are fixed parameters to be estimated as coefficients of time dummies for each year in the sample. 
+
+In order to perform a difference-in-difference estimate, we need a control group. In order to determine if the changes in smoking habits were due to the policy we need to look at the differnece in time periods (before and after policy implmentation) as well as the difference in treatment groups (control vs. treatment group). It is unclear how the Federal policies are adopted in each state (e.g. all at once or one at a time), so it is unclear if control groups are even possible. It may be a stretch (and not a true comparison of equal samples), but Native American reservations might serve as potential control groups. 
+
+If we had proper control gorups, we could estimate the difference-in-differences using the complete pooling linear regression listed below.  In this regression, Time is a dummy variable equal to 1 if we are in the treatment period when the policy is implemented an 0 otherwise, and Treatment indicates the group that receives the treatment (1) and 0 otherwise. We also include an interaction between the Treatment and Time. 
+
+y = B0 + B1(Treatment) + B2(Time) + B3(Treatment x Time)
+
+As it turns out, the coefficient on the interaction (B3) is the difference-in-differnece estimator. This value would represent our difference-in-difference between the treatment groups and time periods. 
+
+### Part 2, Problem 8: Predictions
+Next, I look at 1 year ahead forecasts for the Within model and OLS, omitting the last year in the data (1992). We compare the Within model to OLS in terms of predictive performance. 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Training data drops the last time period
+training <- Yeardata.p[!Yeardata.p$year == 92, ]
+# Test data includes only the last time period
+# Must include 91 in our test data due to the lagged sales independent variable
+test <- Yeardata.p[Yeardata.p$year == 92 | Yeardata.p$year == 91, ]
+test$year <- 91
+
+
+# Next, we fit the OLS and Within models with the training data
+OLS.Train    <- lm(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi,
+                data = training)
+
+Within.Train <- lm(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi + 
+                     factor(year) + factor(state), 
+                   data = training)
+
+# Predict test data in OLS and Within Models
+OLS.Pred    <- predict(OLS.Train, newdata = test)
+Within.Pred <- predict(Within.Train, newdata = test)
+
+
+
+# Calculate the residuals
+OLS.resid    <- test$ln.sales - OLS.Pred
+Within.resid <- test$ln.sales - Within.Pred
+
+# Get the rMSE
+rMSE.OLS <- mean(OLS.resid^2)
+rMSE.Within <- mean(Within.resid^2)
+
+# Create table of rMSE
+Table.III <- round(rMSE.OLS,5)
+Table.III <- rbind(Table.III, round(rMSE.Within,5))
+
+
+# Row and column names for table
+rownames(Table.III) <- c("OLS", "Within")
+colnames(Table.III) <- c("rMSE")
+Table.III
+
+
+```
+The Within model has a slightly larger rMSE value than the OLS model. This suggests that complete pooling might be more appropriate for this panel data since we see less variance in our standard errors.
+
+
+### Part 2, Problem 9: Homoskedastic, heteroskedasticity robust, and serial-correlation robust standard errors
+
+First, I observe if there is a time trend by looking at the gam of the time against the log transformed sales.
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Determine if there could be a time trend by looking at the gam of time
+Yeardata.p$year2 <- as.numeric(Yeardata.p$year)
+
+OLS.gamyear <- gam(ln.sales ~ ln.price + ln.pimin + ln.ndi + s(year2) + factor(state) + factor(year),
+                   data = Yeardata.p)
+plot(OLS.gamyear,
+     residuals = TRUE,
+     shade = TRUE,
+     main = "Year vs. log Sales",
+     select = 1)
+
+```
+There does seem to be a time trend on sales, suggesting a first difference model might be appropriate. Next, I look at the first difference model.
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+# Serial-correlation
+# Estimate first-differenced model
+first.diff <- plm(ln.sales ~ ln.lagsales + ln.price + ln.pimin + ln.ndi +
+                  factor(year) + factor(state),
+                  data = Yeardata.p,
+                  model = "fd")
+
+# Make first differenced transformations
+Yeardata.p$lnsales.diff    <- diff(Yeardata.p$ln.sales)
+Yeardata.p$lnlagsales.diff <- diff(Yeardata.p$ln.lagsales)
+Yeardata.p$lnprice.diff    <- diff(Yeardata.p$ln.price)
+Yeardata.p$lnpimin.diff    <- diff(Yeardata.p$ln.pimin)
+Yeardata.p$ndi.diff        <- diff(Yeardata.p$ln.ndi)
+
+# Create a matrix with first-differenced regressors
+x <- cbind(rep(1, nrow(Yeardata.p)),
+           Yeardata.p$lnlagsales.diff,
+           Yeardata.p$lnprice.diff,
+           Yeardata.p$lnpimin.diff,
+           Yeardata.p$ndi.diff)
+
+# Get model coefficients
+coefs <- coef(first.diff)[1:5]
+
+# Make predictions from estimated model
+preds <- x %*% coefs
+
+# Add model predictions, residuals, and lagged residuals to data frame
+Yeardata.p$preds      <- preds[, 1]
+Yeardata.p$resids     <- Yeardata.p$lnsales.diff - preds[ , 1]
+Yeardata.p$lagresids  <- lag(Yeardata.p$resids)
+
+# Conduct serial correlation regression
+serialcor.test <- lm(resids ~ lagresids, data = Yeardata.p)
+
+plot(Yeardata.p$lagresids, Yeardata.p$resids,
+     ylab = "Residuals",
+     xlab = "Lagged Residuals",
+     pch = 19,
+     col = rgb(0, 0, 0, 0.5))
+abline(serialcor.test)
+
+```
+
+
+We can see that the first-differenced residuals seem to be close to zero, suggesting this could be more than a random walk in the park. 
+
+Next, we look at the homoskedastic, heteroskedastic and serial-correlation robust standard errors.
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE, fig.align='center'}
+local({r <- getOption("repos"); 
+       r["CRAN"] <- "http://cran.r-project.org"; options(repos=r)})
+
+# Homoskedastic errors (standard errors)
+summary(within.plm)
+
+
+# Get heteroskedasticity robust ses
+hetero <- coeftest(within.plm,
+                   vcov = function(x) vcovHC(x,
+                                   method = "white1",
+                                   type = "HC0",
+                                   cluster = "group"))
+
+# Get serial-correlation robust ses
+serial <- coeftest(within.plm,
+                   vcov = function(x) vcovHC(x,
+                                   method = "arellano",
+                                   type = "HC0",
+                                   cluster = "group"))
+
+# Pull out the standard errors of the coeficients for each method
+homoskedastic.coefs <- summary(within.plm)$coefficients[c(1,2,3,4), c(2)]
+hetero.coefs        <- hetero[c(1,2,3,4), c(2)]
+serial.coefs        <- serial[c(1,2,3,4), c(2)]
+
+
+# Observe ratios of ses
+# Ratio of homoskedastic to heteroskedastic
+ratio.homo2hetero <- homoskedastic.coefs / hetero.coefs
+ratio.homo2hetero
+
+# Ratio of homoskedastic to serial
+ratio.homo2serial <- homoskedastic.coefs / serial.coefs
+ratio.homo2serial
+
+# Ratio of heteroskedastic to serial
+ratio.hetero2serial <- hetero.coefs / serial.coefs
+ratio.hetero2serial
+
+```
+ From the ratio of homoskedastic to heteroskedastic standard errors, we see that the heteroskedastic errors are larger (i.e. ratios are less than one). We also see ratios less than one for the homoskedastic to serial and heteroskedastic to serial standard errors, suggesting the serial standard errors are the largest of the three methods. Since the serial-correlation robust standard errors are the largest, it suggests that serial correlation does exist within our data and should be adjusted accordingly. Perhaps our model should consider another lagged independent variable or look at a 2 or 3-year lag on the sales. 
+
+The population that we are using to make our "robust" errors are the 46 states in this data frame. I'm not sure what it means to "need standard errors", but it is always important to observe the standard errors of your specified models. Performing robust standard error calculations helps the researcher infer if the model is misspecified or if there is potentially an omitted variable bias. 
